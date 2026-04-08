@@ -91,9 +91,16 @@ class Coin {
     this.angularVelocity.z *= this.angularDamping;
 
     // 床との衝突判定（コインの下面が地面に接したとき）
+    // 厳密な判定：下面がちょうど地面に接した時を捉える
     const coinBottomY = this.position.y - this.height / 2;
+    const prevCoinBottomY = (this.position.y - this.velocity.y * deltaTime) - this.height / 2;
+
+    // コインが地面を越える場合、または地面に接している場合
     if (coinBottomY <= 0) {
-      this.handleGroundCollision();
+      // 着地中でない場合のみ衝突処理
+      if (!this.isGrounded || this.velocity.y <= 0) {
+        this.handleGroundCollision();
+      }
     }
 
     // 境界判定（左右）
@@ -127,14 +134,24 @@ class Coin {
     this.position.y = this.height / 2;
     this.bounceCount++;
 
-    // コインの傾きを確認（Z軸の回転）
+    // コインの傾きを詳細に分析
     const normalizedRotZ = ((this.rotation.z % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+
+    // 表（heads: 0）と裏（tails: π）までの角度
     const distToHeads = Math.min(normalizedRotZ, Math.PI * 2 - normalizedRotZ);
     const distToTails = Math.abs(normalizedRotZ - Math.PI);
+    const angleToTarget = Math.min(distToHeads, distToTails);
 
-    // 地面平行までの角度差分（ラジアン）
-    const angleToFlat = Math.min(distToHeads, distToTails);
-    const isAlmostFlat = angleToFlat < 0.15; // 約8.6度以内なら平坦と判定
+    // X軸とY軸の傾き量（垂直からの角度）
+    const tiltX = Math.abs(this.rotation.x % (Math.PI * 2));
+    const tiltY = Math.abs(this.rotation.y % (Math.PI * 2));
+    const maxTilt = Math.max(
+      Math.min(tiltX, Math.PI * 2 - tiltX),
+      Math.min(tiltY, Math.PI * 2 - tiltY)
+    );
+
+    // 完全に水平の定義：Z軸が0またはπに非常に近い + X/Y軸の傾きがない
+    const isCompletelyFlat = angleToTarget < 0.05 && maxTilt < 0.1; // 約2.9度以内
 
     // 最初の衝撃での反発
     this.velocity.y *= -this.bounceElasticity;
@@ -147,24 +164,22 @@ class Coin {
     this.velocity.x *= (1 - this.friction * 0.5);
     this.velocity.z *= (1 - this.friction * 0.5);
 
-    if (!isAlmostFlat) {
-      // 水平でない場合：側面でバウンド
-      // X軸とY軸の回転を減衰させて、Z軸中心の回転のみを強調
-      this.angularVelocity.x *= 0.4; // 大幅に減衰
-      this.angularVelocity.y *= 0.4; // 大幅に減衰
-      // Z軸周辺の回転は維持（フリップを続行）
-      this.angularVelocity.z *= 0.8;
+    if (!isCompletelyFlat) {
+      // コインが完全に平坦でない場合：回転を続行
 
-      // 角速度が小さければ、強制的にフリップを続ける
-      const angularSpeed = Math.sqrt(
-        this.angularVelocity.x ** 2 +
-        this.angularVelocity.y ** 2 +
-        this.angularVelocity.z ** 2
-      );
+      // X軸とY軸の回転を大幅に減衰（倒れ込みを修正）
+      this.angularVelocity.x *= 0.2;
+      this.angularVelocity.y *= 0.2;
 
-      if (angularSpeed < 1 && this.bounceCount < 3) {
-        // 勢いがなくなったら、強制的にZ軸周辺を回転させる
-        this.angularVelocity.z = (Math.random() - 0.5) * 8;
+      // Z軸周辺の回転を保持・促進（フリップを続行）
+      this.angularVelocity.z *= 0.85;
+
+      // 回転が弱くなっていたら、強制的にフリップを励起
+      const spinSpeed = Math.abs(this.angularVelocity.z);
+      if (spinSpeed < 2 && this.bounceCount < 4) {
+        // コインの現在の向きから、より多く回転させる
+        const targetSpin = angleToTarget < Math.PI / 2 ? 5 : -5;
+        this.angularVelocity.z = targetSpin;
       }
 
       this.groundedFrames = 0;
@@ -172,23 +187,23 @@ class Coin {
       return;
     }
 
-    // 地面平行の場合：完全に着地
+    // 完全に平坦な場合：着地プロセスへ
     this.groundedFrames++;
     this.isGrounded = true;
 
-    // 地面との接触時にスピンを減衰（ただしZ軸は保持）
-    this.angularVelocity.x *= this.spinDamping * 0.5;
-    this.angularVelocity.y *= this.spinDamping * 0.5;
-    // Z軸はゆっくり減速
-    this.angularVelocity.z *= 0.95;
+    // 微細な回転も減衰させる
+    this.angularVelocity.x *= 0.7;
+    this.angularVelocity.y *= 0.7;
+    this.angularVelocity.z *= 0.92;
 
-    // 速度がゼロに近づいたら停止
+    // 速度の完全停止判定
     const speedX = Math.abs(this.velocity.x);
     const speedY = Math.abs(this.velocity.y);
     const speedZ = Math.abs(this.velocity.z);
     const totalSpeed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
 
-    if (totalSpeed < 0.3 && this.groundedFrames > 2) {
+    // 平坦な状態で3フレーム以上 かつ 速度が十分に低い
+    if (this.groundedFrames >= 3 && totalSpeed < 0.2) {
       this.finishFlip();
     }
   }

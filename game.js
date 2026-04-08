@@ -140,14 +140,14 @@ function tossCoin() {
     }
   }, 100);
 
-  // 安全装置：4秒後に強制的に着地判定
+  // 安全装置：6秒後に強制的に着地判定（コインが完全に平坦になるまで待つ）
   timeoutId = setTimeout(() => {
     if (checkInterval) clearInterval(checkInterval);
     if (coin && !coin.isLanded()) {
       coin.finishFlip();
       setTimeout(showCoinResult, 500);
     }
-  }, 4000);
+  }, 6000);
 }
 
 function showCoinResult() {
