@@ -17,10 +17,13 @@ let lastTime = Date.now();
 
 // 初期化
 function initThreeJS() {
+  console.log('Initializing Three.js...');
+
   // シーン作成
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e);
   scene.fog = new THREE.Fog(0x1a1a2e, 50, 100);
+  console.log('Scene created');
 
   // カメラ設定
   const width = window.innerWidth;
@@ -28,12 +31,19 @@ function initThreeJS() {
   camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
   camera.position.set(0, 3, 8);
   camera.lookAt(0, 1, 0);
+  console.log('Camera set up');
 
   // レンダラー設定
-  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+  const canvas = document.getElementById('canvas');
+  if (!canvas) {
+    console.error('Canvas element not found!');
+    return;
+  }
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
   renderer.setSize(width, height);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+  console.log('Renderer created, size:', width, height);
 
   // ライト設定
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -45,6 +55,7 @@ function initThreeJS() {
   directionalLight.shadow.mapSize.width = 2048;
   directionalLight.shadow.mapSize.height = 2048;
   scene.add(directionalLight);
+  console.log('Lights added');
 
   // 地面
   const groundGeometry = new THREE.PlaneGeometry(30, 30);
@@ -58,17 +69,21 @@ function initThreeJS() {
   const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
   gridHelper.position.y = 0.01;
   scene.add(gridHelper);
+  console.log('Ground and grid added');
 
   // コイン作成
   createCoin();
+  console.log('Coin mesh created');
 
   // 敵オブジェクト
   enemy = new Enemy();
+  console.log('Enemy created');
 
   // ウィンドウリサイズ対応
   window.addEventListener('resize', onWindowResize);
 
   // アニメーションループ開始
+  console.log('Starting animation loop');
   animate();
 }
 
@@ -296,12 +311,30 @@ function animate() {
     coinMesh.rotation.x = coin.rotation.x;
     coinMesh.rotation.y = coin.rotation.y;
     coinMesh.rotation.z = coin.rotation.z;
+  } else if (!coinMesh) {
+    console.warn('coinMesh is null');
   }
 
-  renderer.render(scene, camera);
+  // レンダリング
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  } else {
+    console.warn('Missing renderer, scene, or camera');
+  }
 }
 
 // ページロード時に初期化
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded event fired');
+  console.log('THREE:', typeof THREE);
   initThreeJS();
 });
+
+// ページ読み込みが完了していない場合もキャッチ
+if (document.readyState === 'loading') {
+  // DOMContentLoadedを待つ
+} else {
+  // すでに読み込まれている場合はすぐに初期化
+  console.log('Document already loaded, initializing...');
+  setTimeout(initThreeJS, 100);
+}
