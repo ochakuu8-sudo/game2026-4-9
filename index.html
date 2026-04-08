@@ -17,12 +17,25 @@
       height: 100vh;
       overflow: hidden;
       background: #000;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      position: relative;
     }
 
     #canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      display: block !important;
+      position: fixed;
+      top: 0;
+      left: 0;
     }
 
     /* UI Base */

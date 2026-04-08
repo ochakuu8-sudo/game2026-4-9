@@ -61,11 +61,14 @@ function initGame() {
 function setupThreeJS() {
   const width = window.innerWidth;
   const height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+
+  console.log(`Setting up Three.js: ${width}x${height}, DPR: ${dpr}`);
 
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e);
-  scene.fog = new THREE.Fog(0x1a1a2e, 50, 100);
+  scene.background = new THREE.Color(0x2a2a3a);
+  scene.fog = new THREE.Fog(0x2a2a3a, 50, 100);
 
   // Camera
   camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
@@ -74,26 +77,44 @@ function setupThreeJS() {
 
   // Renderer
   const canvas = document.getElementById('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(width, height);
+  if (!canvas) {
+    console.error('❌ Canvas element not found!');
+    return;
+  }
+
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    precision: 'highp'
+  });
+
+  renderer.setSize(width, height, false);
+  renderer.setPixelRatio(Math.min(dpr, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+  console.log('✓ Renderer created:', renderer.domElement.width, 'x', renderer.domElement.height);
 
   // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
   directionalLight.position.set(5, 10, 7);
   directionalLight.castShadow = true;
   directionalLight.shadow.mapSize.width = 2048;
   directionalLight.shadow.mapSize.height = 2048;
   scene.add(directionalLight);
 
+  console.log('✓ Lights added');
+
   // Ground
   const groundGeometry = new THREE.PlaneGeometry(30, 30);
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a4a2a,
+    color: 0x4a6a4a,
     roughness: 0.8,
+    emissive: 0x222222
   });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
@@ -101,12 +122,16 @@ function setupThreeJS() {
   scene.add(ground);
 
   // Grid
-  const grid = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+  const grid = new THREE.GridHelper(30, 30, 0x555555, 0x333333);
   grid.position.y = 0.01;
   scene.add(grid);
 
+  console.log('✓ Ground and grid added');
+
   // Coin mesh
   createCoinMesh();
+
+  console.log('✓ Three.js setup complete');
 }
 
 /**
@@ -306,9 +331,12 @@ function updateUI() {
 function onWindowResize() {
   const width = window.innerWidth;
   const height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(width, height);
+  renderer.setSize(width, height, false);
+  renderer.setPixelRatio(Math.min(dpr, 2));
 }
 
 /**
