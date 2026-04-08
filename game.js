@@ -28,21 +28,31 @@ let lastTime = Date.now();
  * Initialize game
  */
 function initGame() {
-  // Physics
-  initPhysics();
+  console.log('🎮 Initializing game...');
 
-  // Three.js scene
-  setupThreeJS();
+  try {
+    // Physics
+    initPhysics();
+    console.log('✓ Physics initialized');
 
-  // Game objects
-  coinPhysics = new CoinPhysics();
-  enemy = new Enemy();
+    // Three.js scene
+    setupThreeJS();
+    console.log('✓ Three.js scene setup');
 
-  // Events
-  window.addEventListener('resize', onWindowResize);
+    // Game objects
+    coinPhysics = new CoinPhysics();
+    enemy = new Enemy();
+    console.log('✓ Game objects created');
 
-  // Start render loop
-  animate();
+    // Events
+    window.addEventListener('resize', onWindowResize);
+
+    // Start render loop
+    console.log('✓ Starting animation loop');
+    animate();
+  } catch (error) {
+    console.error('❌ Error during initialization:', error);
+  }
 }
 
 /**
@@ -173,17 +183,26 @@ function showSkillSelection() {
  * Select skill and toss coin
  */
 function selectSkill(skill) {
+  console.log('🎲 Selected skill:', skill.name);
+
   gameState.selectedSkill = skill;
   gameState.isWaiting = true;
 
   document.getElementById('skill-panel').classList.add('hidden');
   document.getElementById('status-text').textContent = `${skill.name}を発動...`;
 
+  if (!coinPhysics) {
+    console.error('❌ coinPhysics not initialized!');
+    return;
+  }
+
+  console.log('🪙 Flipping coin...');
   coinPhysics.flip();
 
   // Wait for coin to land
   const checkLand = setInterval(() => {
     if (coinPhysics.isLanded) {
+      console.log('✓ Coin landed:', coinPhysics.landedSide);
       clearInterval(checkLand);
       setTimeout(showResult, 500);
     }
@@ -192,6 +211,7 @@ function selectSkill(skill) {
   // Safety timeout
   setTimeout(() => {
     if (!coinPhysics.isLanded) {
+      console.warn('⚠ Timeout: forcing coin to settle');
       coinPhysics.settleOnGround();
       showResult();
     }
@@ -326,8 +346,23 @@ function animate() {
 /**
  * Initialize on page load
  */
-document.addEventListener('DOMContentLoaded', initGame);
+function setupGameWhenReady() {
+  console.log('📄 DOM ready, starting game initialization...');
 
-if (document.readyState !== 'loading') {
-  setTimeout(initGame, 100);
+  // Wait a bit for libraries to load
+  if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
+    console.warn('⚠ Libraries not ready yet, retrying...');
+    setTimeout(setupGameWhenReady, 100);
+    return;
+  }
+
+  console.log('✓ Libraries loaded');
+  initGame();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupGameWhenReady);
+} else {
+  console.log('📄 Document already loaded');
+  setTimeout(setupGameWhenReady, 200);
 }

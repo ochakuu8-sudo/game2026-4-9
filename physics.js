@@ -107,6 +107,7 @@ class CoinPhysics {
    * Flip the coin (toss it into the air)
    */
   flip() {
+    console.log('🪙 Coin flip started');
     this.isFlipping = true;
     this.isLanded = false;
     this.landedSide = null;
@@ -130,6 +131,7 @@ class CoinPhysics {
       (Math.random() - 0.5) * spinIntensity,
       (Math.random() - 0.5) * spinIntensity
     );
+    console.log('→ Velocity:', this.body.velocity, 'Spin:', spinIntensity);
   }
 
   /**
