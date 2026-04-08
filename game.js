@@ -96,13 +96,21 @@ function hideAllScreens() {
 function hideAllPhases() {
   document.querySelectorAll('.phase').forEach((phase) => {
     phase.classList.remove('active');
+    phase.classList.add('hidden');
   });
+}
+
+function showPhase(phaseId) {
+  const phase = document.getElementById(phaseId);
+  if (phase) {
+    phase.classList.remove('hidden');
+    phase.classList.add('active');
+  }
 }
 
 function showSkillPhase() {
   hideAllPhases();
-  const skillPhase = document.getElementById('skillPhase');
-  skillPhase.classList.add('active');
+  showPhase('skillPhase');
 
   const skillOptions = document.getElementById('skillOptions');
   skillOptions.innerHTML = '';
@@ -133,7 +141,6 @@ function showSkillPhase() {
 }
 
 function selectSkill(skill, cardElement) {
-  console.log('Skill selected:', skill.name);
   gameState.selectedSkill = skill;
 
   // 選択状態を表示
@@ -144,15 +151,13 @@ function selectSkill(skill, cardElement) {
 
   // 短い遅延の後、トスフェーズへ
   setTimeout(() => {
-    console.log('Showing toss phase');
     showTossPhase();
   }, 400);
 }
 
 function showTossPhase() {
   hideAllPhases();
-  const tossPhase = document.getElementById('tossPhase');
-  tossPhase.classList.add('active');
+  showPhase('tossPhase');
 
   const coinDisplay = document.getElementById('coinDisplay');
   coinDisplay.textContent = '🪙';
@@ -197,8 +202,7 @@ function tossCoin() {
 
 function showResultPhase() {
   hideAllPhases();
-  const resultPhase = document.getElementById('resultPhase');
-  resultPhase.classList.add('active');
+  showPhase('resultPhase');
 
   const resultContent = document.getElementById('resultContent');
   const skill = gameState.selectedSkill;
@@ -341,8 +345,7 @@ function nextRound() {
 
 function showGameOver() {
   hideAllPhases();
-  const gameOverPhase = document.getElementById('gameOverPhase');
-  gameOverPhase.classList.add('active');
+  showPhase('gameOverPhase');
 
   const gameOverContent = document.getElementById('gameOverContent');
   gameOverContent.innerHTML = `
