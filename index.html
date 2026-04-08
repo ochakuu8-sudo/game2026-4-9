@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>コイントスローグライク - スキルゲーム</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- ゲーム開始画面 -->
+    <div id="startScreen" class="screen active">
+      <div class="start-content">
+        <h1>🪙 コイントスローグライク</h1>
+        <p>スキルコインを選択して、コイントスで表が出たらスキルが発動！</p>
+        <button class="btn btn-large" onclick="startGame()">ゲーム開始</button>
+      </div>
+    </div>
+
+    <!-- メインゲーム画面 -->
+    <div id="gameScreen" class="screen">
+      <div class="game-header">
+        <div class="stat">
+          <span class="label">ラウンド</span>
+          <span class="value" id="round">1</span>
+        </div>
+        <div class="stat">
+          <span class="label">金</span>
+          <span class="value" id="gold">0</span>
+        </div>
+        <div class="stat">
+          <span class="label">HP</span>
+          <span class="value" id="hp">100</span>
+        </div>
+      </div>
+
+      <!-- スキル選択フェーズ -->
+      <div id="skillPhase" class="phase">
+        <h2>スキルを選択してください</h2>
+        <div id="skillOptions" class="skill-grid"></div>
+      </div>
+
+      <!-- コイントスフェーズ -->
+      <div id="tossPhase" class="phase hidden">
+        <h2>コインをトス！</h2>
+        <div class="coin-container">
+          <div id="coinDisplay" class="coin"></div>
+        </div>
+        <button class="btn btn-large" id="tossBtn" onclick="tossCoin()">コインをトス</button>
+      </div>
+
+      <!-- 結果表示フェーズ -->
+      <div id="resultPhase" class="phase hidden">
+        <div id="resultContent"></div>
+        <button class="btn btn-large" onclick="nextRound()">次のラウンド</button>
+      </div>
+
+      <!-- ゲームオーバー -->
+      <div id="gameOverPhase" class="phase hidden">
+        <div id="gameOverContent"></div>
+        <button class="btn btn-large" onclick="showStartScreen()">タイトルに戻る</button>
+      </div>
+    </div>
+
+    <!-- スキル詳細表示 -->
+    <div id="skillDetail" class="modal hidden">
+      <div class="modal-content">
+        <span class="close" onclick="closeSkillDetail()">&times;</span>
+        <h2 id="skillName"></h2>
+        <p id="skillDescription"></p>
+        <button class="btn" onclick="selectSkillFromDetail()">このスキルを選択</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="skills.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
