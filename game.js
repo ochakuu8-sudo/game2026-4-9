@@ -20,6 +20,11 @@ let gameState = {
   damageDealt: 0,
   selectedSkill: null,
   isWaiting: false,
+  // Defense states
+  shieldActive: false,
+  dodgeActive: false,
+  hardenActive: false,
+  damageReduction: 0,
 };
 
 let lastTime = Date.now();
@@ -63,8 +68,6 @@ function setupThreeJS() {
   const height = window.innerHeight;
   const dpr = window.devicePixelRatio || 1;
 
-  console.log(`Setting up Three.js: ${width}x${height}, DPR: ${dpr}`);
-
   // Scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x2a2a3a);
@@ -96,11 +99,9 @@ function setupThreeJS() {
   renderer.setSize(width, height, false);
   renderer.setPixelRatio(Math.min(dpr, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
-  console.log('✓ Renderer created:', renderer.domElement.width, 'x', renderer.domElement.height);
-
-  // Lights - Multiple light sources for better visibility
+  // Lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   scene.add(ambientLight);
 
@@ -111,12 +112,10 @@ function setupThreeJS() {
   directionalLight.shadow.mapSize.height = 2048;
   scene.add(directionalLight);
 
-  // Additional point light for better coin visibility
+  // Additional point light
   const pointLight = new THREE.PointLight(0xffffff, 0.8);
   pointLight.position.set(-5, 8, -5);
   scene.add(pointLight);
-
-  console.log('✓ Lights added');
 
   // Ground
   const groundGeometry = new THREE.PlaneGeometry(30, 30);
@@ -136,12 +135,8 @@ function setupThreeJS() {
   grid.position.y = 0.01;
   scene.add(grid);
 
-  console.log('✓ Ground and grid added');
-
   // Coin mesh
   createCoinMesh();
-
-  console.log('✓ Three.js setup complete');
 }
 
 /**
@@ -177,6 +172,10 @@ function startGame() {
     damageDealt: 0,
     selectedSkill: null,
     isWaiting: false,
+    shieldActive: false,
+    dodgeActive: false,
+    hardenActive: false,
+    damageReduction: 0,
   };
 
   if (coinPhysics) coinPhysics.destroy();
@@ -218,8 +217,6 @@ function showSkillSelection() {
  * Select skill and toss coin
  */
 function selectSkill(skill) {
-  console.log('🎲 Selected skill:', skill.name);
-
   gameState.selectedSkill = skill;
   gameState.isWaiting = true;
 
@@ -231,13 +228,11 @@ function selectSkill(skill) {
     return;
   }
 
-  console.log('🪙 Flipping coin...');
   coinPhysics.flip();
 
   // Wait for coin to land
   const checkLand = setInterval(() => {
-    if (coinPhysics.isLanded) {
-      console.log('✓ Coin landed:', coinPhysics.landedSide);
+    if (coinPhysics && coinPhysics.isLanded()) {
       clearInterval(checkLand);
       setTimeout(showResult, 500);
     }
@@ -245,8 +240,8 @@ function selectSkill(skill) {
 
   // Safety timeout
   setTimeout(() => {
-    if (!coinPhysics.isLanded) {
-      console.warn('⚠ Timeout: forcing coin to settle');
+    if (checkLand) clearInterval(checkLand);
+    if (coinPhysics && !coinPhysics.isLanded()) {
       coinPhysics.settleOnGround();
       showResult();
     }
@@ -257,14 +252,14 @@ function selectSkill(skill) {
  * Show coin result
  */
 function showResult() {
+  if (!coinPhysics) return;
+
   const result = coinPhysics.getResult();
   const skill = gameState.selectedSkill;
 
-  const effect = applySkillEffect(skill, gameState, result);
+  if (!skill) return;
 
-  if (effect.damage > 0) {
-    gameState.damageDealt += effect.damage;
-  }
+  const effect = applySkillEffect(skill, gameState, result);
 
   document.getElementById('result-icon').textContent = result ? '✅ 表' : '❌ 裏';
   document.getElementById('result-title').textContent = skill.name;
@@ -278,11 +273,30 @@ function showResult() {
   document.getElementById('result-panel').classList.add('show');
 
   // Enemy attack
-  const enemyDamage = 15 + gameState.round * 2;
-  gameState.hp -= Math.max(1, enemyDamage);
+  let enemyDamage = 15 + gameState.round * 2;
+
+  // Apply defense effects
+  if (gameState.dodgeActive) {
+    enemyDamage = 0;
+    gameState.dodgeActive = false;
+    console.log('✓ Dodge active - no damage taken');
+  } else if (gameState.shieldActive) {
+    enemyDamage = Math.floor(enemyDamage * 0.5);
+    gameState.shieldActive = false;
+    console.log('✓ Shield active - 50% damage reduction');
+  }
+
+  if (gameState.hardenActive) {
+    enemyDamage = Math.floor(enemyDamage * (1 - gameState.damageReduction));
+    console.log('✓ Harden active - ' + (gameState.damageReduction * 100) + '% reduction');
+  }
+
+  gameState.hp -= Math.max(0, enemyDamage);
   document.getElementById('hp').textContent = Math.max(0, gameState.hp);
 
   if (gameState.hp <= 0) {
+    setTimeout(gameOver, 1500);
+  } else if (enemy.isDefeated()) {
     setTimeout(gameOver, 1500);
   }
 }
@@ -295,6 +309,12 @@ function nextRound() {
 
   gameState.round++;
   gameState.gold += 10;
+
+  // Reset defense states for next round
+  gameState.shieldActive = false;
+  gameState.dodgeActive = false;
+  gameState.hardenActive = false;
+  gameState.damageReduction = 0;
 
   if (gameState.round % 5 === 0) {
     gameState.maxHp += 50;
@@ -343,10 +363,15 @@ function onWindowResize() {
   const height = window.innerHeight;
   const dpr = window.devicePixelRatio || 1;
 
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  renderer.setSize(width, height, false);
-  renderer.setPixelRatio(Math.min(dpr, 2));
+  if (camera) {
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  if (renderer) {
+    renderer.setSize(width, height, false);
+    renderer.setPixelRatio(Math.min(dpr, 2));
+  }
 }
 
 /**
@@ -387,22 +412,17 @@ function animate() {
  * Initialize on page load
  */
 function setupGameWhenReady() {
-  console.log('📄 DOM ready, starting game initialization...');
-
-  // Wait a bit for libraries to load
+  // Wait for libraries to load
   if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
-    console.warn('⚠ Libraries not ready yet, retrying...');
     setTimeout(setupGameWhenReady, 100);
     return;
   }
 
-  console.log('✓ Libraries loaded');
   initGame();
 }
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setupGameWhenReady);
 } else {
-  console.log('📄 Document already loaded');
   setTimeout(setupGameWhenReady, 200);
 }
