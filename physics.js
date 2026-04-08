@@ -76,7 +76,12 @@ class Coin {
       this.velocity.y *= -this.bounceElasticity;
 
       // 速度が小さくなったら着地と判定
-      if (Math.abs(this.velocity.y) < 0.5 && Math.abs(this.velocity.x) < 0.5) {
+      const speedX = Math.abs(this.velocity.x);
+      const speedY = Math.abs(this.velocity.y);
+      const speedZ = Math.abs(this.velocity.z);
+      const totalSpeed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
+
+      if (totalSpeed < 0.8) {
         this.finishFlip();
       }
     }

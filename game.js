@@ -91,32 +91,47 @@ function createCoin() {
   coinMesh = new THREE.Mesh(coinGeometry, materials);
   coinMesh.castShadow = true;
   coinMesh.receiveShadow = true;
-  coinMesh.position.copy(coin.position);
+  coinMesh.position.set(0, 2, 0);
   scene.add(coinMesh);
 }
 
 function tossCoin() {
   if (gameState.isWaitingForResult) return;
+  if (!coin) {
+    console.error('Error: coin object not initialized');
+    return;
+  }
 
   gameState.isWaitingForResult = true;
   document.getElementById('status-text').textContent = 'コイン中...';
 
-  coin.flip();
+  try {
+    coin.flip();
+  } catch (error) {
+    console.error('Error during coin flip:', error);
+    gameState.isWaitingForResult = false;
+    return;
+  }
 
   // 着地判定のタイマー
-  const checkInterval = setInterval(() => {
-    if (coin.isLanded()) {
-      clearInterval(checkInterval);
+  let checkInterval = null;
+  let timeoutId = null;
+
+  checkInterval = setInterval(() => {
+    if (coin && coin.isLanded()) {
+      if (checkInterval) clearInterval(checkInterval);
+      if (timeoutId) clearTimeout(timeoutId);
       setTimeout(showCoinResult, 800);
     }
   }, 100);
 
   // 安全装置：3秒後に強制的に着地判定
-  setTimeout(() => {
-    if (!coin.isLanded()) {
+  timeoutId = setTimeout(() => {
+    if (checkInterval) clearInterval(checkInterval);
+    if (coin && !coin.isLanded()) {
       coin.finishFlip();
+      setTimeout(showCoinResult, 500);
     }
-    clearInterval(checkInterval);
   }, 3000);
 }
 
@@ -270,17 +285,17 @@ function animate() {
   const deltaTime = Math.min((now - lastTime) / 1000, 0.016); // 最大 16ms（60fps）
   lastTime = now;
 
-  // コイン更新
-  if (coin && gameState.gameActive) {
+  // コイン更新（ゲーム進行中）
+  if (coin) {
     coin.update(deltaTime);
+  }
 
-    // コインメッシュを更新
-    if (coinMesh) {
-      coinMesh.position.copy(coin.position);
-      coinMesh.rotation.x = coin.rotation.x;
-      coinMesh.rotation.y = coin.rotation.y;
-      coinMesh.rotation.z = coin.rotation.z;
-    }
+  // コインメッシュを更新（常に同期）
+  if (coinMesh && coin) {
+    coinMesh.position.copy(coin.position);
+    coinMesh.rotation.x = coin.rotation.x;
+    coinMesh.rotation.y = coin.rotation.y;
+    coinMesh.rotation.z = coin.rotation.z;
   }
 
   renderer.render(scene, camera);
