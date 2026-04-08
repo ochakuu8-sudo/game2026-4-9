@@ -198,13 +198,23 @@ class Coin {
       Math.min(tiltY, Math.PI * 2 - tiltY)
     );
 
-    // 完全に水平か判定
-    const isCompletelyFlat = angleToTarget < 0.08 && maxTilt < 0.15;
+    // 完全に水平か判定（より厳しい条件）
+    const isCompletelyFlat = angleToTarget < 0.05 && maxTilt < 0.05;
 
     if (!isCompletelyFlat) {
-      // コインが傾いている場合：回転を減衰
-      this.body.angularVelocity.scale(0.5, this.body.angularVelocity);
-      this.body.velocity.y *= 0.6;
+      // コインが傾いている場合：強く減衰させて安定化を促す
+      this.body.angularVelocity.scale(0.3, this.body.angularVelocity);
+      this.body.velocity.y *= 0.5;
+
+      // X/Y軸の傾きを積極的に補正
+      const euler = this.body.quaternion.toEuler();
+      const correctionQuat = new CANNON.Quaternion();
+      correctionQuat.setFromAxisAngle(
+        new CANNON.Vec3(0, 0, 1),
+        euler.z
+      );
+      this.body.quaternion.copy(correctionQuat);
+
       this.groundedFrames = 0;
       this.isGrounded = false;
       return;
@@ -217,13 +227,14 @@ class Coin {
     const totalSpeed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
 
     // 着地判定（平坦で速度が低い）
-    if (this.groundedFrames >= 2 && totalSpeed < 0.5) {
+    if (this.groundedFrames >= 3 && totalSpeed < 0.3) {
       this.finishFlip();
+      return;
     }
 
-    // 速度を低下させる
-    this.body.velocity.scale(0.7, this.body.velocity);
-    this.body.angularVelocity.scale(0.8, this.body.angularVelocity);
+    // 速度をさらに低下させて安定化
+    this.body.velocity.scale(0.6, this.body.velocity);
+    this.body.angularVelocity.scale(0.7, this.body.angularVelocity);
   }
 
   /**
@@ -239,12 +250,23 @@ class Coin {
 
     this.landedSide = normalizedRotZ < Math.PI ? 'heads' : 'tails';
 
+    // 回転を完全に固定（水平に）
+    if (this.landedSide === 'heads') {
+      // 表：Z軸を0に固定
+      this.body.quaternion.set(0, 0, 0, 1);
+    } else {
+      // 裏：Z軸をπに固定
+      const quat = new CANNON.Quaternion();
+      quat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI);
+      this.body.quaternion.copy(quat);
+    }
+
     // 速度をリセット
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
 
-    // 位置を調整
-    this.body.position.y = this.height / 2 + this.radius - 0.05;
+    // 位置を調整（正確に地面に接触）
+    this.body.position.y = this.radius + this.height / 2;
   }
 
   /**
