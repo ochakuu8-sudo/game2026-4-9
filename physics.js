@@ -18,9 +18,9 @@ class Coin {
     this.gravity = -9.8;
     this.damping = 0.992; // 速度減衰（空気抵抗）
     this.angularDamping = 0.97; // 回転減衰
-    this.bounceElasticity = 0.65; // 反発係数
-    this.friction = 0.3; // 摩擦係数
-    this.spinDamping = 0.92; // スピン減衰（地面との接触時）
+    this.bounceElasticity = 0.45; // 反発係数（低下させてエネルギー損失を増加）
+    this.friction = 0.55; // 摩擦係数（増加させて地面での摩擦を強化）
+    this.spinDamping = 0.85; // スピン減衰（地面との接触時、より強く減衰）
 
     // 状態
     this.isFlipping = false;
@@ -151,40 +151,34 @@ class Coin {
     );
 
     // 完全に水平の定義：Z軸が0またはπに非常に近い + X/Y軸の傾きがない
-    const isCompletelyFlat = angleToTarget < 0.05 && maxTilt < 0.1; // 約2.9度以内
+    // より低い角度で着地判定を行う（より早く安定化）
+    const isCompletelyFlat = angleToTarget < 0.08 && maxTilt < 0.15;
 
     // 最初の衝撃での反発
     this.velocity.y *= -this.bounceElasticity;
 
-    // バウンスごとに反発係数を低下させる
-    const bounceReduction = Math.pow(0.7, this.bounceCount - 1);
+    // バウンスごとに反発係数を大幅に低下させる
+    // 各バウンスでエネルギーが急速に消失する
+    const bounceReduction = Math.pow(0.55, this.bounceCount - 1);
     this.velocity.y *= bounceReduction;
 
-    // 摩擦により水平速度を減衰
-    this.velocity.x *= (1 - this.friction * 0.5);
-    this.velocity.z *= (1 - this.friction * 0.5);
+    // 摩擦により水平速度を大きく減衰
+    this.velocity.x *= (1 - this.friction);
+    this.velocity.z *= (1 - this.friction);
 
     if (!isCompletelyFlat) {
-      // コインが完全に平坦でない場合：強制的に水平化を試みる
+      // コインが完全に平坦でない場合：減衰処理
 
-      // X軸とY軸の回転を積極的に減衰（急速に0へ）
-      this.angularVelocity.x *= 0.1;  // 90%減衰
-      this.angularVelocity.y *= 0.1;  // 90%減衰
+      // X軸とY軸の回転を強く減衰
+      this.angularVelocity.x *= 0.05;
+      this.angularVelocity.y *= 0.05;
 
-      // X軸とY軸の回転そのものを0に近づける（直接減衰）
-      this.rotation.x *= 0.95;
-      this.rotation.y *= 0.95;
+      // X軸とY軸の回転そのものも減衰
+      this.rotation.x *= 0.92;
+      this.rotation.y *= 0.92;
 
-      // Z軸周辺の回転を保持・促進（フリップを続行）
-      this.angularVelocity.z *= 0.85;
-
-      // 回転が弱くなっていたら、強制的にフリップを励起
-      const spinSpeed = Math.abs(this.angularVelocity.z);
-      if (spinSpeed < 2 && this.bounceCount < 4) {
-        // コインの現在の向きから、より多く回転させる
-        const targetSpin = angleToTarget < Math.PI / 2 ? 5 : -5;
-        this.angularVelocity.z = targetSpin;
-      }
+      // Z軸回転の減衰（自然な減衰、人工的な強化なし）
+      this.angularVelocity.z *= this.spinDamping;
 
       this.groundedFrames = 0;
       this.isGrounded = false;
@@ -195,14 +189,14 @@ class Coin {
     this.groundedFrames++;
     this.isGrounded = true;
 
-    // X/Y軸をしっかり0に固定
-    this.rotation.x *= 0.9;
-    this.rotation.y *= 0.9;
-    this.angularVelocity.x *= 0.5;
-    this.angularVelocity.y *= 0.5;
+    // X/Y軸を強く減衰させる
+    this.rotation.x *= 0.85;
+    this.rotation.y *= 0.85;
+    this.angularVelocity.x *= 0.2;
+    this.angularVelocity.y *= 0.2;
 
-    // Z軸の微細な回転も減衰させる
-    this.angularVelocity.z *= 0.92;
+    // Z軸の回転も強く減衰させる
+    this.angularVelocity.z *= this.spinDamping;
 
     // 速度の完全停止判定
     const speedX = Math.abs(this.velocity.x);
@@ -210,8 +204,8 @@ class Coin {
     const speedZ = Math.abs(this.velocity.z);
     const totalSpeed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
 
-    // 平坦な状態で3フレーム以上 かつ 速度が十分に低い
-    if (this.groundedFrames >= 3 && totalSpeed < 0.2) {
+    // より早い着地判定：平坦な状態で1フレーム以上 かつ 速度が十分に低い
+    if (this.groundedFrames >= 1 && totalSpeed < 0.3) {
       this.finishFlip();
     }
   }
