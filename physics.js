@@ -6,6 +6,10 @@ class Coin {
     this.rotation = { x: 0, y: 0, z: 0 };
     this.scale = 1;
 
+    // コインサイズ（Three.jsのCylinderGeometryと同じ）
+    this.radius = 0.8;
+    this.height = 0.1; // 円盤の厚さ
+
     // 速度・角速度
     this.velocity = { x: 0, y: 0, z: 0 };
     this.angularVelocity = { x: 0, y: 0, z: 0 };
@@ -86,8 +90,9 @@ class Coin {
     this.angularVelocity.y *= this.angularDamping;
     this.angularVelocity.z *= this.angularDamping;
 
-    // 床との衝突判定
-    if (this.position.y <= 0.3) {
+    // 床との衝突判定（コインの下面が地面に接したとき）
+    const coinBottomY = this.position.y - this.height / 2;
+    if (coinBottomY <= 0) {
       this.handleGroundCollision();
     }
 
@@ -118,7 +123,8 @@ class Coin {
   }
 
   handleGroundCollision() {
-    this.position.y = 0.3;
+    // コインの下面が地面に接するように位置を調整
+    this.position.y = this.height / 2;
     this.bounceCount++;
 
     // 最初の衝撃での反発
