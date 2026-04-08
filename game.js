@@ -127,21 +127,28 @@ function showCoinResult() {
   // スキル効果を適用
   const skillEffect = applySkillEffect(skill, gameState, isHeads);
 
+  // ダメージ追跡
+  if (skillEffect.damage > 0) {
+    gameState.damageDealt += skillEffect.damage;
+  }
+
   // 結果パネル表示
   const resultPanel = document.getElementById('result-panel');
   document.getElementById('result-icon').textContent = isHeads ? '✅ 表' : '❌ 裏';
   document.getElementById('result-title').textContent = skill.name;
-  document.getElementById('result-message').textContent = skillEffect.message;
 
+  let resultMessage = skillEffect.message;
   if (skillEffect.damage > 0) {
-    document.getElementById('result-message').textContent += `\n敵に${skillEffect.damage}ダメージ！`;
+    resultMessage += `\n敵に${skillEffect.damage}ダメージ！`;
   }
+  document.getElementById('result-message').textContent = resultMessage;
 
   resultPanel.classList.add('show');
 
   // 敵の反撃ダメージ
   const enemyDamage = 15 + gameState.round * 2;
   gameState.hp -= Math.max(1, enemyDamage);
+  document.getElementById('hp').textContent = Math.max(0, gameState.hp);
 
   setTimeout(() => {
     if (gameState.hp <= 0) {
@@ -157,10 +164,14 @@ function nextRound() {
   gameState.round++;
   gameState.gold += 10;
 
+  // 5ラウンドごとに最大HPと現在のHPを回復
   if (gameState.round % 5 === 0) {
     gameState.maxHp += 50;
-    gameState.hp = gameState.maxHp;
+    gameState.hp = Math.min(gameState.hp + 50, gameState.maxHp);
   }
+
+  // HP上限処理
+  gameState.hp = Math.min(gameState.hp, gameState.maxHp);
 
   updateUI();
   showSkillSelection();
