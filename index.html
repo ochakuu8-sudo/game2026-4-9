@@ -3,77 +3,392 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>コイントスローグライク - スキルゲーム</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>3D コイントスローグライク</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* UI層 */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      color: white;
+      font-size: 16px;
+    }
+
+    /* ゲーム情報 */
+    #game-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      pointer-events: auto;
+    }
+
+    .stat-display {
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: 2px solid #00ff00;
+      font-weight: bold;
+    }
+
+    /* スキル選択パネル */
+    #skill-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.9);
+      border-top: 3px solid #00ff00;
+      padding: 20px;
+      max-height: 35%;
+      display: flex;
+      flex-direction: column;
+      pointer-events: auto;
+      transform: translateY(0);
+      transition: transform 0.3s ease;
+    }
+
+    #skill-panel.hidden {
+      transform: translateY(120%);
+      pointer-events: none;
+    }
+
+    #skill-panel h2 {
+      color: #00ff00;
+      margin-bottom: 15px;
+      text-shadow: 0 0 10px #00ff00;
+    }
+
+    #skill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 15px;
+      overflow-y: auto;
+      max-height: 150px;
+    }
+
+    .skill-button {
+      background: rgba(0, 100, 0, 0.5);
+      border: 2px solid #00ff00;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      font-weight: bold;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .skill-button:hover {
+      background: rgba(0, 150, 0, 0.7);
+      box-shadow: 0 0 15px #00ff00;
+    }
+
+    .skill-button:active {
+      transform: scale(0.95);
+    }
+
+    .skill-icon {
+      font-size: 1.8em;
+    }
+
+    .skill-name {
+      font-size: 0.85em;
+    }
+
+    .skill-desc {
+      font-size: 0.65em;
+      color: #88ff88;
+      max-height: 40px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* コイン結果表示 */
+    #result-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      border: 3px solid #00ff00;
+      padding: 40px;
+      border-radius: 12px;
+      text-align: center;
+      display: none;
+      pointer-events: auto;
+      z-index: 100;
+      max-width: 400px;
+    }
+
+    #result-panel.show {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #result-panel h3 {
+      color: #00ff00;
+      font-size: 1.5em;
+      text-shadow: 0 0 10px #00ff00;
+    }
+
+    #result-panel p {
+      color: #88ff88;
+      line-height: 1.6;
+    }
+
+    .result-icon {
+      font-size: 4em;
+      line-height: 1;
+    }
+
+    .result-button {
+      background: #006600;
+      border: 2px solid #00ff00;
+      color: #00ff00;
+      padding: 12px 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1em;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .result-button:hover {
+      background: #009900;
+      box-shadow: 0 0 15px #00ff00;
+    }
+
+    /* タイトル画面 */
+    #title-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #001a00, #003300);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 200;
+      pointer-events: auto;
+    }
+
+    #title-screen h1 {
+      color: #00ff00;
+      font-size: 3em;
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px #00ff00;
+    }
+
+    #title-screen p {
+      color: #88ff88;
+      font-size: 1.2em;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    #start-button {
+      background: #006600;
+      border: 3px solid #00ff00;
+      color: #00ff00;
+      padding: 15px 50px;
+      font-size: 1.3em;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+
+    #start-button:hover {
+      background: #009900;
+      box-shadow: 0 0 25px #00ff00;
+    }
+
+    #title-screen.hidden {
+      display: none;
+    }
+
+    /* ゲームオーバー画面 */
+    #gameover-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 200;
+      pointer-events: auto;
+      display: none;
+    }
+
+    #gameover-screen.show {
+      display: flex;
+    }
+
+    #gameover-screen h2 {
+      color: #ff6666;
+      font-size: 2.5em;
+      margin-bottom: 30px;
+      text-shadow: 0 0 15px #ff6666;
+    }
+
+    .stats-display {
+      background: rgba(0, 100, 0, 0.3);
+      border: 2px solid #00ff00;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      color: #88ff88;
+    }
+
+    .stats-display p {
+      font-size: 1.1em;
+      margin: 10px 0;
+    }
+
+    #retry-button {
+      background: #006600;
+      border: 3px solid #00ff00;
+      color: #00ff00;
+      padding: 12px 40px;
+      font-size: 1.1em;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+
+    #retry-button:hover {
+      background: #009900;
+      box-shadow: 0 0 20px #00ff00;
+    }
+
+    /* 状態表示 */
+    #status-text {
+      position: absolute;
+      top: 100px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid #00ff00;
+      padding: 15px;
+      border-radius: 6px;
+      color: #00ff00;
+      font-size: 0.9em;
+      font-family: monospace;
+    }
+
+    /* モバイル対応 */
+    @media (max-width: 600px) {
+      #game-info {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      #skill-grid {
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      }
+
+      .skill-button {
+        padding: 10px;
+      }
+
+      #title-screen h1 {
+        font-size: 2em;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <!-- ゲーム開始画面 -->
-    <div id="startScreen" class="screen active">
-      <div class="start-content">
-        <h1>🪙 コイントスローグライク</h1>
-        <p>スキルコインを選択して、コイントスで表が出たらスキルが発動！</p>
-        <button class="btn btn-large" onclick="startGame()">ゲーム開始</button>
-      </div>
+  <canvas id="canvas"></canvas>
+
+  <div id="ui-layer">
+    <!-- ゲーム情報 -->
+    <div id="game-info">
+      <div class="stat-display">ラウンド: <span id="round">1</span></div>
+      <div class="stat-display">HP: <span id="hp">100</span> / 100</div>
+      <div class="stat-display">金: <span id="gold">0</span></div>
     </div>
 
-    <!-- メインゲーム画面 -->
-    <div id="gameScreen" class="screen">
-      <div class="game-header">
-        <div class="stat">
-          <span class="label">ラウンド</span>
-          <span class="value" id="round">1</span>
-        </div>
-        <div class="stat">
-          <span class="label">金</span>
-          <span class="value" id="gold">0</span>
-        </div>
-        <div class="stat">
-          <span class="label">HP</span>
-          <span class="value" id="hp">100</span>
-        </div>
-      </div>
-
-      <!-- スキル選択フェーズ -->
-      <div id="skillPhase" class="phase">
-        <h2>スキルを選択してください</h2>
-        <div id="skillOptions" class="skill-grid"></div>
-      </div>
-
-      <!-- コイントスフェーズ -->
-      <div id="tossPhase" class="phase">
-        <h2>コインをトス！</h2>
-        <div class="coin-container">
-          <div id="coinDisplay" class="coin"></div>
-        </div>
-        <button class="btn btn-large" id="tossBtn" onclick="tossCoin()">コインをトス</button>
-      </div>
-
-      <!-- 結果表示フェーズ -->
-      <div id="resultPhase" class="phase">
-        <div id="resultContent"></div>
-        <button class="btn btn-large" onclick="nextRound()">次のラウンド</button>
-      </div>
-
-      <!-- ゲームオーバー -->
-      <div id="gameOverPhase" class="phase">
-        <div id="gameOverContent"></div>
-        <button class="btn btn-large" onclick="showStartScreen()">タイトルに戻る</button>
-      </div>
-    </div>
-
-    <!-- スキル詳細表示 -->
-    <div id="skillDetail" class="modal hidden">
-      <div class="modal-content">
-        <span class="close" onclick="closeSkillDetail()">&times;</span>
-        <h2 id="skillName"></h2>
-        <p id="skillDescription"></p>
-        <button class="btn" onclick="selectSkillFromDetail()">このスキルを選択</button>
-      </div>
-    </div>
+    <!-- 状態表示 -->
+    <div id="status-text">スキルを選択してください</div>
   </div>
 
+  <!-- スキル選択パネル -->
+  <div id="skill-panel">
+    <h2>スキルを選択</h2>
+    <div id="skill-grid"></div>
+  </div>
+
+  <!-- 結果パネル -->
+  <div id="result-panel">
+    <div id="result-icon" class="result-icon"></div>
+    <h3 id="result-title">スキル名</h3>
+    <p id="result-message">結果メッセージ</p>
+    <button class="result-button" onclick="nextRound()">次へ</button>
+  </div>
+
+  <!-- タイトル画面 -->
+  <div id="title-screen">
+    <h1>🪙 3D コイントスローグライク</h1>
+    <p>コインをトスしてスキルを発動！<br>敵とのバトルで生き延びよう</p>
+    <button id="start-button" onclick="startGame()">ゲーム開始</button>
+  </div>
+
+  <!-- ゲームオーバー画面 -->
+  <div id="gameover-screen">
+    <h2>ゲームオーバー</h2>
+    <div class="stats-display">
+      <p>到達ラウンド: <span id="final-round">1</span></p>
+      <p>獲得ゴールド: <span id="final-gold">0</span></p>
+      <p>与えたダメージ: <span id="final-damage">0</span></p>
+    </div>
+    <button id="retry-button" onclick="showTitleScreen()">タイトルに戻る</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="skills.js"></script>
+  <script src="physics.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

@@ -1,401 +1,281 @@
-// ゲーム状態
+// Three.jsシーンセットアップ
+let scene, camera, renderer;
+let coinMesh, coin;
+let enemy;
 let gameState = {
   round: 1,
   hp: 100,
   maxHp: 100,
   gold: 0,
   damageDealt: 0,
-  lastSkill: null,
+  gameActive: false,
+  isWaitingForResult: false,
   selectedSkill: null,
-  coinResult: null,
-  gameOver: false,
-
-  // バフ/デバフ
-  shieldActive: false,
-  dodgeActive: false,
-  damageReduction: 0,
-  shieldDamageReduction: 0,
-  powerMultiplier: 1,
-  powerRoundsLeft: 0,
-  nextRoundExtraSkill: false,
-  guaranteedNextSkill: false,
-  regenerationActive: false,
-  regenerationAmount: 0,
-
-  // 敵のデバフ
-  enemyPoisoned: false,
-  poisonRounds: 0,
-  poisonDamage: 0,
-  enemyWeakened: false,
-  enemyBlinded: false,
-  enemyMissChance: 0,
-  enemyFrozen: false,
-  frozenTurns: 0,
-
-  // 特殊効果
-  lifesteal: 0,
-  goldMultiplier: 1,
-  rarerSkillsAvailable: false,
-  extraTurn: false,
-  comboActive: false,
-  godmodeActive: false,
-  godmodeRounds: 0,
 };
 
-// ゲーム開始
+let lastTime = Date.now();
+
+// 初期化
+function initThreeJS() {
+  // シーン作成
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+  scene.fog = new THREE.Fog(0x1a1a2e, 50, 100);
+
+  // カメラ設定
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+  camera.position.set(0, 3, 8);
+  camera.lookAt(0, 1, 0);
+
+  // レンダラー設定
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+  renderer.setSize(width, height);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+  // ライト設定
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  scene.add(ambientLight);
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight.position.set(5, 10, 7);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.mapSize.width = 2048;
+  directionalLight.shadow.mapSize.height = 2048;
+  scene.add(directionalLight);
+
+  // 地面
+  const groundGeometry = new THREE.PlaneGeometry(30, 30);
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2a4a2a, roughness: 0.8 });
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // グリッド表示
+  const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+  gridHelper.position.y = 0.01;
+  scene.add(gridHelper);
+
+  // コイン作成
+  createCoin();
+
+  // 敵オブジェクト
+  enemy = new Enemy();
+
+  // ウィンドウリサイズ対応
+  window.addEventListener('resize', onWindowResize);
+
+  // アニメーションループ開始
+  animate();
+}
+
+function createCoin() {
+  // 既存のコインを削除
+  if (coinMesh) {
+    scene.remove(coinMesh);
+  }
+
+  // コイン作成（円盤）
+  const coinGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32);
+
+  // 複合マテリアル（表と裏で色分け）
+  const materials = [
+    new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.8, roughness: 0.2 }), // サイド
+    new THREE.MeshStandardMaterial({ color: 0xffdd00, metalness: 0.9, roughness: 0.1 }), // 表（上）
+    new THREE.MeshStandardMaterial({ color: 0xddaa00, metalness: 0.7, roughness: 0.3 }), // 裏（下）
+  ];
+
+  coinMesh = new THREE.Mesh(coinGeometry, materials);
+  coinMesh.castShadow = true;
+  coinMesh.receiveShadow = true;
+  coinMesh.position.copy(coin.position);
+  scene.add(coinMesh);
+}
+
+function tossCoin() {
+  if (gameState.isWaitingForResult) return;
+
+  gameState.isWaitingForResult = true;
+  document.getElementById('status-text').textContent = 'コイン中...';
+
+  coin.flip();
+
+  // 着地判定のタイマー
+  const checkInterval = setInterval(() => {
+    if (coin.isLanded()) {
+      clearInterval(checkInterval);
+      setTimeout(showCoinResult, 800);
+    }
+  }, 100);
+
+  // 安全装置：3秒後に強制的に着地判定
+  setTimeout(() => {
+    if (!coin.isLanded()) {
+      coin.finishFlip();
+    }
+    clearInterval(checkInterval);
+  }, 3000);
+}
+
+function showCoinResult() {
+  const isHeads = coin.getResult();
+  const skill = gameState.selectedSkill;
+
+  // スキル効果を適用
+  const skillEffect = applySkillEffect(skill, gameState, isHeads);
+
+  // 結果パネル表示
+  const resultPanel = document.getElementById('result-panel');
+  document.getElementById('result-icon').textContent = isHeads ? '✅ 表' : '❌ 裏';
+  document.getElementById('result-title').textContent = skill.name;
+  document.getElementById('result-message').textContent = skillEffect.message;
+
+  if (skillEffect.damage > 0) {
+    document.getElementById('result-message').textContent += `\n敵に${skillEffect.damage}ダメージ！`;
+  }
+
+  resultPanel.classList.add('show');
+
+  // 敵の反撃ダメージ
+  const enemyDamage = 15 + gameState.round * 2;
+  gameState.hp -= Math.max(1, enemyDamage);
+
+  setTimeout(() => {
+    if (gameState.hp <= 0) {
+      showGameOver();
+    }
+  }, 1500);
+}
+
+function nextRound() {
+  const resultPanel = document.getElementById('result-panel');
+  resultPanel.classList.remove('show');
+
+  gameState.round++;
+  gameState.gold += 10;
+
+  if (gameState.round % 5 === 0) {
+    gameState.maxHp += 50;
+    gameState.hp = gameState.maxHp;
+  }
+
+  updateUI();
+  showSkillSelection();
+}
+
+function showSkillSelection() {
+  gameState.isWaitingForResult = false;
+
+  const skills = getRandomSkills(3, false);
+  const skillGrid = document.getElementById('skill-grid');
+  skillGrid.innerHTML = '';
+
+  skills.forEach((skill) => {
+    const button = document.createElement('button');
+    button.className = 'skill-button';
+    button.innerHTML = `
+      <div class="skill-icon">${skill.icon}</div>
+      <div class="skill-name">${skill.name}</div>
+      <div class="skill-desc">${skill.description}</div>
+    `;
+    button.onclick = () => selectSkill(skill);
+    skillGrid.appendChild(button);
+  });
+
+  document.getElementById('skill-panel').classList.remove('hidden');
+  document.getElementById('status-text').textContent = 'スキルを選択してコインをトスしてください';
+}
+
+function selectSkill(skill) {
+  gameState.selectedSkill = skill;
+  document.getElementById('skill-panel').classList.add('hidden');
+  document.getElementById('status-text').textContent = `${skill.name}でコインをトス...`;
+
+  // コインをトス
+  setTimeout(tossCoin, 500);
+}
+
+function updateUI() {
+  document.getElementById('round').textContent = gameState.round;
+  document.getElementById('hp').textContent = Math.max(0, gameState.hp);
+  document.getElementById('gold').textContent = gameState.gold;
+}
+
 function startGame() {
+  document.getElementById('title-screen').classList.add('hidden');
+
   gameState = {
     round: 1,
     hp: 100,
     maxHp: 100,
     gold: 0,
     damageDealt: 0,
-    lastSkill: null,
+    gameActive: true,
+    isWaitingForResult: false,
     selectedSkill: null,
-    coinResult: null,
-    gameOver: false,
-    shieldActive: false,
-    dodgeActive: false,
-    damageReduction: 0,
-    shieldDamageReduction: 0,
-    powerMultiplier: 1,
-    powerRoundsLeft: 0,
-    nextRoundExtraSkill: false,
-    guaranteedNextSkill: false,
-    regenerationActive: false,
-    regenerationAmount: 0,
-    enemyPoisoned: false,
-    poisonRounds: 0,
-    poisonDamage: 0,
-    enemyWeakened: false,
-    enemyBlinded: false,
-    enemyMissChance: 0,
-    enemyFrozen: false,
-    frozenTurns: 0,
-    lifesteal: 0,
-    goldMultiplier: 1,
-    rarerSkillsAvailable: false,
-    extraTurn: false,
-    comboActive: false,
-    godmodeActive: false,
-    godmodeRounds: 0,
   };
 
-  hideAllScreens();
-  document.getElementById('gameScreen').classList.add('active');
-  showSkillPhase();
+  coin = new Coin();
+  coin.reset();
+
+  updateUI();
+  showSkillSelection();
 }
 
-// 画面遷移
-function hideAllScreens() {
-  document.querySelectorAll('.screen').forEach((screen) => {
-    screen.classList.remove('active');
-  });
-}
-
-function hideAllPhases() {
-  document.querySelectorAll('.phase').forEach((phase) => {
-    phase.classList.remove('active');
-    phase.classList.add('hidden');
-  });
-}
-
-function showPhase(phaseId) {
-  const phase = document.getElementById(phaseId);
-  if (phase) {
-    phase.classList.remove('hidden');
-    phase.classList.add('active');
-  }
-}
-
-function showSkillPhase() {
-  hideAllPhases();
-  showPhase('skillPhase');
-
-  const skillOptions = document.getElementById('skillOptions');
-  skillOptions.innerHTML = '';
-
-  const skills = getRandomSkills(3, gameState.rarerSkillsAvailable);
-
-  skills.forEach((skill) => {
-    const card = document.createElement('div');
-    card.className = 'skill-card';
-    card.innerHTML = `
-      <div class="skill-icon">${skill.icon}</div>
-      <div class="skill-name">${skill.name}</div>
-      <div class="skill-type">${skill.type}</div>
-      <div class="skill-description">${skill.description}</div>
-    `;
-    card.style.cursor = 'pointer';
-
-    const handleClick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      selectSkill(skill, card);
-    };
-
-    card.addEventListener('click', handleClick);
-    card.addEventListener('touchend', handleClick);
-    skillOptions.appendChild(card);
-  });
-}
-
-function selectSkill(skill, cardElement) {
-  gameState.selectedSkill = skill;
-
-  // 選択状態を表示
-  document.querySelectorAll('.skill-card').forEach((card) => {
-    card.classList.remove('hover');
-  });
-  cardElement.classList.add('hover');
-
-  // 短い遅延の後、トスフェーズへ
-  setTimeout(() => {
-    showTossPhase();
-  }, 400);
-}
-
-function showTossPhase() {
-  hideAllPhases();
-  showPhase('tossPhase');
-
-  const coinDisplay = document.getElementById('coinDisplay');
-  coinDisplay.textContent = '🪙';
-  coinDisplay.className = 'coin';
-  coinDisplay.style.animation = 'none';
-
-  // ボタンを有効化
-  const tossBtn = document.getElementById('tossBtn');
-  if (tossBtn) {
-    tossBtn.disabled = false;
-  }
-}
-
-function tossCoin() {
-  const coinDisplay = document.getElementById('coinDisplay');
-  coinDisplay.classList.add('flipping');
-
-  // コインが回っている間ボタンを無効化
-  document.getElementById('tossBtn').disabled = true;
-
-  // 0.6秒後に結果を決定
-  setTimeout(() => {
-    const isHeads = Math.random() > 0.5;
-    gameState.coinResult = isHeads;
-
-    // コイン表示を更新
-    coinDisplay.classList.remove('flipping');
-    if (isHeads) {
-      coinDisplay.className = 'coin heads';
-      coinDisplay.textContent = '表';
-    } else {
-      coinDisplay.className = 'coin tails';
-      coinDisplay.textContent = '裏';
-    }
-
-    // 結果フェーズへ
-    setTimeout(() => {
-      showResultPhase();
-    }, 500);
-  }, 600);
-}
-
-function showResultPhase() {
-  hideAllPhases();
-  showPhase('resultPhase');
-
-  const resultContent = document.getElementById('resultContent');
-  const skill = gameState.selectedSkill;
-  const isHeads = gameState.coinResult;
-
-  const skillEffect = applySkillEffect(skill, gameState, isHeads);
-
-  let resultHTML = `
-    <div class="result-icon">${isHeads ? '✅' : '❌'}</div>
-    <h3>${skill.name}</h3>
-    <div class="skill-effect">${skillEffect.message}</div>
-  `;
-
-  // ダメージ表示
-  if (skillEffect.damage > 0) {
-    resultHTML += `<p>敵に ${skillEffect.damage} ダメージ！</p>`;
-  }
-
-  // HP表示
-  resultHTML += `<p>あなたのHP: ${Math.max(0, gameState.hp)} / ${gameState.maxHp}</p>`;
-
-  // 敵の攻撃シミュレーション
-  const enemyDamage = calculateEnemyDamage();
-  if (enemyDamage > 0) {
-    resultHTML += `<p>敵の反撃！ ${enemyDamage} ダメージを受けた！</p>`;
-    gameState.hp -= enemyDamage;
-  }
-
-  // ゲームオーバー判定
-  if (gameState.hp <= 0) {
-    resultContent.innerHTML = resultHTML;
-    setTimeout(() => {
-      showGameOver();
-    }, 2000);
-    return;
-  }
-
-  resultContent.innerHTML = resultHTML;
-}
-
-function calculateEnemyDamage() {
-  let baseDamage = 15 + gameState.round * 2;
-
-  // 敵が凍結状態
-  if (gameState.enemyFrozen && gameState.frozenTurns > 0) {
-    gameState.frozenTurns--;
-    return 0;
-  }
-
-  // 敵が弱体化
-  if (gameState.enemyWeakened) {
-    baseDamage = Math.floor(baseDamage * 0.5);
-  }
-
-  // 敵が盲目
-  if (gameState.enemyBlinded && Math.random() < gameState.enemyMissChance) {
-    return 0;
-  }
-
-  // 毒ダメージ
-  if (gameState.enemyPoisoned && gameState.poisonRounds > 0) {
-    gameState.poisonRounds--;
-    baseDamage += gameState.poisonDamage;
-  }
-
-  // 敵の攻撃を回避
-  if (gameState.dodgeActive) {
-    gameState.dodgeActive = false;
-    return 0;
-  }
-
-  // シールドでダメージ軽減
-  if (gameState.shieldActive) {
-    baseDamage = Math.floor(baseDamage * (1 - gameState.shieldDamageReduction));
-    gameState.shieldActive = false;
-  }
-
-  // 硬化スキン
-  if (gameState.damageReduction > 0) {
-    baseDamage = Math.floor(baseDamage * (1 - gameState.damageReduction));
-    gameState.damageReduction = 0;
-  }
-
-  // ゴッドモード
-  if (gameState.godmodeActive) {
-    return 0;
-  }
-
-  return Math.max(1, baseDamage);
-}
-
-function nextRound() {
-  gameState.round++;
-  gameState.gold += 10 * gameState.goldMultiplier;
-  gameState.goldMultiplier = 1;
-  gameState.lastSkill = gameState.selectedSkill;
-  gameState.selectedSkill = null;
-  gameState.comboActive = false;
-
-  // バフの継続時間を減らす
-  if (gameState.powerRoundsLeft > 0) {
-    gameState.powerRoundsLeft--;
-  }
-
-  // ゴッドモードの継続時間
-  if (gameState.godmodeActive && gameState.godmodeRounds > 0) {
-    gameState.godmodeRounds--;
-  } else {
-    gameState.godmodeActive = false;
-  }
-
-  // 再生効果
-  if (gameState.regenerationActive) {
-    gameState.hp = Math.min(gameState.maxHp, gameState.hp + gameState.regenerationAmount);
-  }
-
-  // 難易度上昇（HPが200までスケール）
-  if (gameState.round % 5 === 0) {
-    gameState.maxHp += 50;
-    gameState.hp = gameState.maxHp;
-  }
-
-  // 次ラウンドスキル
-  gameState.nextRoundExtraSkill = false;
-  gameState.guaranteedNextSkill = false;
-  gameState.rarerSkillsAvailable = false;
-
-  // UI更新
-  document.getElementById('round').textContent = gameState.round;
-  document.getElementById('gold').textContent = gameState.gold;
-  document.getElementById('hp').textContent = Math.max(0, gameState.hp);
-
-  // 敵のステータスをリセット
-  gameState.enemyWeakened = false;
-  gameState.enemyBlinded = false;
-  gameState.enemyMissChance = 0;
-
-  showSkillPhase();
+function showTitleScreen() {
+  document.getElementById('gameover-screen').classList.remove('show');
+  document.getElementById('title-screen').classList.remove('hidden');
+  document.getElementById('skill-panel').classList.add('hidden');
+  gameState.gameActive = false;
 }
 
 function showGameOver() {
-  hideAllPhases();
-  showPhase('gameOverPhase');
+  gameState.gameActive = false;
 
-  const gameOverContent = document.getElementById('gameOverContent');
-  gameOverContent.innerHTML = `
-    <h3>ゲームオーバー</h3>
-    <p>お疲れ様でした！</p>
-    <div class="stats">
-      <div class="stat-line">
-        <span>到達ラウンド:</span>
-        <span>${gameState.round}</span>
-      </div>
-      <div class="stat-line">
-        <span>獲得ゴールド:</span>
-        <span>${gameState.gold}</span>
-      </div>
-      <div class="stat-line">
-        <span>与えたダメージ:</span>
-        <span>${gameState.damageDealt}</span>
-      </div>
-    </div>
-  `;
+  document.getElementById('final-round').textContent = gameState.round;
+  document.getElementById('final-gold').textContent = gameState.gold;
+  document.getElementById('final-damage').textContent = gameState.damageDealt;
+
+  document.getElementById('gameover-screen').classList.add('show');
 }
 
-function showStartScreen() {
-  hideAllScreens();
-  document.getElementById('startScreen').classList.add('active');
+function onWindowResize() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
 }
 
-// 初期化
-function initialize() {
-  document.getElementById('round').textContent = gameState.round;
-  document.getElementById('gold').textContent = gameState.gold;
-  document.getElementById('hp').textContent = gameState.hp;
-}
+// アニメーションループ
+function animate() {
+  requestAnimationFrame(animate);
 
-// スキル詳細モーダル
-function closeSkillDetail() {
-  document.getElementById('skillDetail').classList.add('hidden');
-}
+  const now = Date.now();
+  const deltaTime = Math.min((now - lastTime) / 1000, 0.016); // 最大 16ms（60fps）
+  lastTime = now;
 
-function selectSkillFromDetail() {
-  // スキルボタンをクリックしたことにする
-  document.querySelectorAll('.skill-card').forEach((card) => {
-    if (card.classList.contains('hover')) {
-      card.click();
+  // コイン更新
+  if (coin && gameState.gameActive) {
+    coin.update(deltaTime);
+
+    // コインメッシュを更新
+    if (coinMesh) {
+      coinMesh.position.copy(coin.position);
+      coinMesh.rotation.x = coin.rotation.x;
+      coinMesh.rotation.y = coin.rotation.y;
+      coinMesh.rotation.z = coin.rotation.z;
     }
-  });
-  closeSkillDetail();
+  }
+
+  renderer.render(scene, camera);
 }
 
 // ページロード時に初期化
 document.addEventListener('DOMContentLoaded', () => {
-  initialize();
+  initThreeJS();
 });
