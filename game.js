@@ -86,9 +86,13 @@ function setupThreeJS() {
     canvas,
     antialias: true,
     alpha: false,
-    precision: 'highp'
+    precision: 'highp',
+    stencil: false,
+    depth: true,
+    preserveDrawingBuffer: false
   });
 
+  renderer.setClearColor(0x2a2a3a, 1.0);
   renderer.setSize(width, height, false);
   renderer.setPixelRatio(Math.min(dpr, 2));
   renderer.shadowMap.enabled = true;
@@ -96,25 +100,31 @@ function setupThreeJS() {
 
   console.log('✓ Renderer created:', renderer.domElement.width, 'x', renderer.domElement.height);
 
-  // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  // Lights - Multiple light sources for better visibility
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
   directionalLight.position.set(5, 10, 7);
   directionalLight.castShadow = true;
   directionalLight.shadow.mapSize.width = 2048;
   directionalLight.shadow.mapSize.height = 2048;
   scene.add(directionalLight);
 
+  // Additional point light for better coin visibility
+  const pointLight = new THREE.PointLight(0xffffff, 0.8);
+  pointLight.position.set(-5, 8, -5);
+  scene.add(pointLight);
+
   console.log('✓ Lights added');
 
   // Ground
   const groundGeometry = new THREE.PlaneGeometry(30, 30);
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x4a6a4a,
-    roughness: 0.8,
-    emissive: 0x222222
+    color: 0x6a8a6a,
+    roughness: 0.6,
+    metalness: 0.1,
+    emissive: 0x444444
   });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
@@ -122,7 +132,7 @@ function setupThreeJS() {
   scene.add(ground);
 
   // Grid
-  const grid = new THREE.GridHelper(30, 30, 0x555555, 0x333333);
+  const grid = new THREE.GridHelper(30, 30, 0x888888, 0x555555);
   grid.position.y = 0.01;
   scene.add(grid);
 
@@ -142,9 +152,9 @@ function createCoinMesh() {
 
   const geometry = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32);
   const materials = [
-    new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.8, roughness: 0.2 }),
-    new THREE.MeshStandardMaterial({ color: 0xffdd00, metalness: 0.9, roughness: 0.1 }),
-    new THREE.MeshStandardMaterial({ color: 0xddaa00, metalness: 0.7, roughness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.8, roughness: 0.2, emissive: 0x333300 }),
+    new THREE.MeshStandardMaterial({ color: 0xffdd00, metalness: 0.9, roughness: 0.1, emissive: 0x444400 }),
+    new THREE.MeshStandardMaterial({ color: 0xddaa00, metalness: 0.7, roughness: 0.3, emissive: 0x332200 }),
   ];
 
   coinMesh = new THREE.Mesh(geometry, materials);
@@ -355,7 +365,7 @@ function animate() {
   }
 
   // Update coin
-  if (coinPhysics) {
+  if (coinPhysics && coinMesh) {
     coinPhysics.update(delta);
 
     const pos = coinPhysics.getPosition();
@@ -367,8 +377,10 @@ function animate() {
     coinMesh.rotation.z = rot.z;
   }
 
-  // Render
-  renderer.render(scene, camera);
+  // Render scene
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
 }
 
 /**
