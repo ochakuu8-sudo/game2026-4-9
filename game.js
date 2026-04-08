@@ -17,7 +17,11 @@ let lastTime = Date.now();
 
 // 初期化
 function initThreeJS() {
-  console.log('Initializing Three.js...');
+  console.log('Initializing Three.js and Cannon.js...');
+
+  // 物理世界を初期化
+  initPhysicsWorld();
+  console.log('Physics world initialized');
 
   // シーン作成
   scene = new THREE.Scene();
@@ -259,6 +263,11 @@ function startGame() {
     selectedSkill: null,
   };
 
+  // 前のコインを破棄
+  if (coin) {
+    coin.destroy();
+  }
+
   coin = new Coin();
   coin.reset();
 
@@ -299,6 +308,11 @@ function animate() {
   const now = Date.now();
   const deltaTime = Math.min((now - lastTime) / 1000, 0.016); // 最大 16ms（60fps）
   lastTime = now;
+
+  // 物理世界をステップ進める
+  if (world) {
+    world.step(1 / 60, deltaTime, 3); // 60fps, deltaTime, maxSubSteps
+  }
 
   // コイン更新（ゲーム進行中）
   if (coin) {
