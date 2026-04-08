@@ -116,13 +116,24 @@ function showSkillPhase() {
       <div class="skill-icon">${skill.icon}</div>
       <div class="skill-name">${skill.name}</div>
       <div class="skill-type">${skill.type}</div>
+      <div class="skill-description">${skill.description}</div>
     `;
-    card.addEventListener('click', () => selectSkill(skill, card));
+    card.style.cursor = 'pointer';
+
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      selectSkill(skill, card);
+    };
+
+    card.addEventListener('click', handleClick);
+    card.addEventListener('touchend', handleClick);
     skillOptions.appendChild(card);
   });
 }
 
 function selectSkill(skill, cardElement) {
+  console.log('Skill selected:', skill.name);
   gameState.selectedSkill = skill;
 
   // 選択状態を表示
@@ -133,8 +144,9 @@ function selectSkill(skill, cardElement) {
 
   // 短い遅延の後、トスフェーズへ
   setTimeout(() => {
+    console.log('Showing toss phase');
     showTossPhase();
-  }, 300);
+  }, 400);
 }
 
 function showTossPhase() {
@@ -145,6 +157,13 @@ function showTossPhase() {
   const coinDisplay = document.getElementById('coinDisplay');
   coinDisplay.textContent = '🪙';
   coinDisplay.className = 'coin';
+  coinDisplay.style.animation = 'none';
+
+  // ボタンを有効化
+  const tossBtn = document.getElementById('tossBtn');
+  if (tossBtn) {
+    tossBtn.disabled = false;
+  }
 }
 
 function tossCoin() {
