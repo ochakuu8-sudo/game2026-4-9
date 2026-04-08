@@ -165,11 +165,15 @@ class Coin {
     this.velocity.z *= (1 - this.friction * 0.5);
 
     if (!isCompletelyFlat) {
-      // コインが完全に平坦でない場合：回転を続行
+      // コインが完全に平坦でない場合：強制的に水平化を試みる
 
-      // X軸とY軸の回転を大幅に減衰（倒れ込みを修正）
-      this.angularVelocity.x *= 0.2;
-      this.angularVelocity.y *= 0.2;
+      // X軸とY軸の回転を積極的に減衰（急速に0へ）
+      this.angularVelocity.x *= 0.1;  // 90%減衰
+      this.angularVelocity.y *= 0.1;  // 90%減衰
+
+      // X軸とY軸の回転そのものを0に近づける（直接減衰）
+      this.rotation.x *= 0.95;
+      this.rotation.y *= 0.95;
 
       // Z軸周辺の回転を保持・促進（フリップを続行）
       this.angularVelocity.z *= 0.85;
@@ -191,9 +195,13 @@ class Coin {
     this.groundedFrames++;
     this.isGrounded = true;
 
-    // 微細な回転も減衰させる
-    this.angularVelocity.x *= 0.7;
-    this.angularVelocity.y *= 0.7;
+    // X/Y軸をしっかり0に固定
+    this.rotation.x *= 0.9;
+    this.rotation.y *= 0.9;
+    this.angularVelocity.x *= 0.5;
+    this.angularVelocity.y *= 0.5;
+
+    // Z軸の微細な回転も減衰させる
     this.angularVelocity.z *= 0.92;
 
     // 速度の完全停止判定
@@ -225,11 +233,14 @@ class Coin {
       this.rotation.z = Math.PI; // 完全に裏に固定
     }
 
-    // 他の軸の回転は0に（コインを完全に水平に）
+    // すべての軸を完全にリセット（コインを完全に水平に）
     this.rotation.x = 0;
     this.rotation.y = 0;
 
-    // 回転を停止
+    // 重心位置を正確に設定（円盤の中心）
+    this.position.y = this.height / 2;
+
+    // すべての回転と速度を完全に停止
     this.angularVelocity = { x: 0, y: 0, z: 0 };
     this.velocity = { x: 0, y: 0, z: 0 };
   }
