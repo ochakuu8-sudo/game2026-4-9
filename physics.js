@@ -1,326 +1,268 @@
 /**
- * 物理エンジン - Cannon.js を使用
- * リアルな物理シミュレーションでコインの挙動を制御
+ * Cannon.js Physics Engine for Coin Toss Game
+ * Handles all physics simulation for coins and world
  */
 
-// グローバル物理世界
-let world;
+let world; // Cannon.js physics world
 
 /**
- * 物理世界を初期化
+ * Initialize physics world with Cannon.js
  */
-function initPhysicsWorld() {
-  // 物理世界を作成
+function initPhysics() {
+  // Create world
   world = new CANNON.World();
   world.gravity.set(0, -9.8, 0);
-  world.defaultContactMaterial.friction = 0.3;
-  world.defaultContactMaterial.restitution = 0.3;
+  world.defaultContactMaterial.friction = 0.4;
+  world.defaultContactMaterial.restitution = 0.2;
 
-  // 床を作成
+  // Ground body
   const groundShape = new CANNON.Plane();
   const groundBody = new CANNON.Body({ mass: 0 });
   groundBody.addShape(groundShape);
   groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
   world.addBody(groundBody);
 
-  // 境界壁を作成
-  createBoundaryWalls();
-}
-
-/**
- * 境界壁を作成
- */
-function createBoundaryWalls() {
-  const boundary = 15;
-  const wallHeight = 10;
-  const wallThickness = 0.5;
-
-  const wallShape = new CANNON.Box(
-    new CANNON.Vec3(wallThickness / 2, wallHeight / 2, boundary)
+  // Boundary walls
+  const boundaryMaterial = new CANNON.Material('boundary');
+  const boundaryContactMaterial = new CANNON.ContactMaterial(
+    boundaryMaterial,
+    boundaryMaterial,
+    { friction: 0.5, restitution: 0.4 }
   );
+  world.addContactMaterial(boundaryContactMaterial);
 
-  // X軸方向の壁
+  const boundary = 15;
+  const wallSize = new CANNON.Vec3(0.5, 10, boundary);
+
+  // X-axis walls
   for (let x of [-boundary, boundary]) {
-    const wallBody = new CANNON.Body({ mass: 0 });
-    wallBody.addShape(wallShape);
+    const wallBody = new CANNON.Body({ mass: 0, material: boundaryMaterial });
+    wallBody.addShape(new CANNON.Box(wallSize));
     wallBody.position.x = x;
     world.addBody(wallBody);
   }
 
-  // Z軸方向の壁
-  const wallShapeZ = new CANNON.Box(
-    new CANNON.Vec3(boundary, wallHeight / 2, wallThickness / 2)
-  );
+  // Z-axis walls
+  const wallSizeZ = new CANNON.Vec3(boundary, 10, 0.5);
   for (let z of [-boundary, boundary]) {
-    const wallBody = new CANNON.Body({ mass: 0 });
-    wallBody.addShape(wallShapeZ);
+    const wallBody = new CANNON.Body({ mass: 0, material: boundaryMaterial });
+    wallBody.addShape(new CANNON.Box(wallSizeZ));
     wallBody.position.z = z;
     world.addBody(wallBody);
   }
 }
 
 /**
- * コインクラス - Cannon.js物理エンジンを使用
+ * Coin physics object
  */
-class Coin {
+class CoinPhysics {
   constructor() {
-    // コイン物理パラメータ
     this.radius = 0.8;
-    this.height = 0.1;
     this.mass = 1;
 
-    // Three.js用位置・回転
-    this.position = { x: 0, y: 2, z: 0 };
-    this.rotation = { x: 0, y: 0, z: 0 };
-
-    // 状態
-    this.isFlipping = false;
-    this.hasLanded = false;
-    this.landedSide = null;
-    this.bounceCount = 0;
-    this.isGrounded = false;
-    this.groundedFrames = 0;
-
-    // Cannon.js物理ボディ
-    this.body = this.createPhysicsBody();
-  }
-
-  /**
-   * 物理ボディを作成
-   */
-  createPhysicsBody() {
+    // Create physics body (sphere approximation)
     const shape = new CANNON.Sphere(this.radius);
-    const body = new CANNON.Body({
+    this.body = new CANNON.Body({
       mass: this.mass,
       shape,
-      linearDamping: 0.2,
-      angularDamping: 0.3,
+      linearDamping: 0.15,
+      angularDamping: 0.25,
     });
 
-    body.position.set(this.position.x, this.position.y, this.position.z);
-    world.addBody(body);
+    this.body.position.set(0, 2.5, 0);
+    world.addBody(this.body);
 
-    return body;
+    // State tracking
+    this.isFlipping = false;
+    this.isLanded = false;
+    this.landedSide = null; // 'heads' or 'tails'
+    this.lastContactTime = 0;
+    this.contactCount = 0;
   }
 
   /**
-   * コインをフリップ（トス）する
+   * Get current position
+   */
+  getPosition() {
+    return {
+      x: this.body.position.x,
+      y: this.body.position.y,
+      z: this.body.position.z,
+    };
+  }
+
+  /**
+   * Get current rotation as Euler angles
+   */
+  getRotation() {
+    const euler = this.body.quaternion.toEuler();
+    return {
+      x: euler.x,
+      y: euler.y,
+      z: euler.z,
+    };
+  }
+
+  /**
+   * Flip the coin (toss it into the air)
    */
   flip() {
     this.isFlipping = true;
-    this.hasLanded = false;
+    this.isLanded = false;
     this.landedSide = null;
-    this.bounceCount = 0;
-    this.isGrounded = false;
-    this.groundedFrames = 0;
+    this.lastContactTime = 0;
+    this.contactCount = 0;
 
-    // 初期速度を設定
-    const upwardForce = 12 + Math.random() * 8;
-    const lateralForceX = (Math.random() - 0.5) * 3;
-    const lateralForceZ = (Math.random() - 0.5) * 3;
+    // Random upward velocity
+    const upForce = 12 + Math.random() * 8;
+    const sideForce = (Math.random() - 0.5) * 2;
 
     this.body.velocity.set(
-      lateralForceX + (Math.random() - 0.5) * 1.5,
-      upwardForce,
-      lateralForceZ + (Math.random() - 0.5) * 1.5
+      sideForce + (Math.random() - 0.5),
+      upForce,
+      sideForce + (Math.random() - 0.5)
     );
 
-    // 回転速度を設定
-    const spinIntensity = 25 + Math.random() * 15;
+    // Random spin
+    const spinIntensity = 20 + Math.random() * 20;
     this.body.angularVelocity.set(
       (Math.random() - 0.5) * spinIntensity,
-      (Math.random() - 0.5) * spinIntensity * 1.2,
-      (Math.random() - 0.5) * spinIntensity * 0.8
+      (Math.random() - 0.5) * spinIntensity,
+      (Math.random() - 0.5) * spinIntensity
     );
   }
 
   /**
-   * 毎フレーム更新
+   * Update physics (called each frame)
    */
   update(deltaTime) {
     if (!this.isFlipping) return;
 
-    // 位置を同期
-    this.position.x = this.body.position.x;
-    this.position.y = this.body.position.y;
-    this.position.z = this.body.position.z;
-
-    // 回転をクォータニオンからオイラー角に変換
-    const euler = this.body.quaternion.toEuler();
-    this.rotation.x = euler.x;
-    this.rotation.y = euler.y;
-    this.rotation.z = euler.z;
-
-    // 地面との衝突判定
-    this.checkGroundCollision();
-  }
-
-  /**
-   * 地面との衝突判定
-   */
-  checkGroundCollision() {
-    // コインの最下部が地面に接しているか
-    if (this.body.position.y - this.radius <= 0.1) {
-      // 上向きの速度がほぼ0か負
-      if (this.body.velocity.y <= 0.5) {
-        this.handleGroundCollision();
-      }
+    // Check if coin hit ground
+    if (this.body.position.y <= this.radius + 0.05) {
+      this.handleGroundContact();
     }
   }
 
   /**
-   * 地面との衝突を処理
+   * Handle ground contact
    */
-  handleGroundCollision() {
-    if (this.isGrounded) {
-      this.groundedFrames++;
+  handleGroundContact() {
+    const now = Date.now();
+    if (now - this.lastContactTime < 100) return; // Debounce
+
+    this.lastContactTime = now;
+    this.contactCount++;
+
+    // Check if coin is flat
+    const isFlat = this.isFlat();
+
+    if (!isFlat) {
+      // Bounce - reduce energy significantly
+      this.body.velocity.y *= -0.4; // Low bounce
+      this.body.velocity.x *= 0.6;
+      this.body.velocity.z *= 0.6;
+
+      // Dampen rotation
+      this.body.angularVelocity.scale(0.4, this.body.angularVelocity);
+      return;
+    }
+
+    // Coin is flat - check if it settled
+    const speed = this.body.velocity.length();
+    const angularSpeed = this.body.angularVelocity.length();
+
+    if (speed < 0.3 && angularSpeed < 0.5 && this.contactCount > 2) {
+      this.settleOnGround();
     } else {
-      this.bounceCount++;
-      this.isGrounded = true;
-      this.groundedFrames = 1;
+      // Still moving/spinning - dampen motion
+      this.body.velocity.scale(0.7, this.body.velocity);
+      this.body.angularVelocity.scale(0.5, this.body.angularVelocity);
     }
+  }
 
-    // コインの向きを分析
+  /**
+   * Check if coin is flat (horizontal)
+   */
+  isFlat() {
+    const euler = this.body.quaternion.toEuler();
+
+    // Check X and Y tilts (should be near 0)
+    const tiltX = Math.min(Math.abs(euler.x), Math.PI - Math.abs(euler.x));
+    const tiltY = Math.min(Math.abs(euler.y), Math.PI - Math.abs(euler.y));
+
+    return tiltX < 0.1 && tiltY < 0.1;
+  }
+
+  /**
+   * Settle coin on ground (finalize landing)
+   */
+  settleOnGround() {
+    this.isFlipping = false;
+    this.isLanded = true;
+
+    // Determine heads or tails
     const euler = this.body.quaternion.toEuler();
     const rotZ = euler.z;
-    const normalizedRotZ = ((rotZ % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const normalizedZ = ((rotZ % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 
-    // 表（heads: 0）と裏（tails: π）までの角度
-    const distToHeads = Math.min(normalizedRotZ, Math.PI * 2 - normalizedRotZ);
-    const distToTails = Math.abs(normalizedRotZ - Math.PI);
-    const angleToTarget = Math.min(distToHeads, distToTails);
+    this.landedSide = normalizedZ < Math.PI ? 'heads' : 'tails';
 
-    // X/Y軸の傾き量
-    const tiltX = Math.abs(euler.x % (Math.PI * 2));
-    const tiltY = Math.abs(euler.y % (Math.PI * 2));
-    const maxTilt = Math.max(
-      Math.min(tiltX, Math.PI * 2 - tiltX),
-      Math.min(tiltY, Math.PI * 2 - tiltY)
-    );
-
-    // 完全に水平か判定（より厳しい条件）
-    const isCompletelyFlat = angleToTarget < 0.05 && maxTilt < 0.05;
-
-    if (!isCompletelyFlat) {
-      // コインが傾いている場合：強く減衰させて安定化を促す
-      this.body.angularVelocity.scale(0.3, this.body.angularVelocity);
-      this.body.velocity.y *= 0.5;
-
-      // X/Y軸の傾きを積極的に補正
-      const euler = this.body.quaternion.toEuler();
-      const correctionQuat = new CANNON.Quaternion();
-      correctionQuat.setFromAxisAngle(
-        new CANNON.Vec3(0, 0, 1),
-        euler.z
-      );
-      this.body.quaternion.copy(correctionQuat);
-
-      this.groundedFrames = 0;
-      this.isGrounded = false;
-      return;
-    }
-
-    // 完全に水平：着地プロセス
-    const speedX = Math.abs(this.body.velocity.x);
-    const speedY = Math.abs(this.body.velocity.y);
-    const speedZ = Math.abs(this.body.velocity.z);
-    const totalSpeed = Math.sqrt(speedX * speedX + speedY * speedY + speedZ * speedZ);
-
-    // 着地判定（平坦で速度が低い）
-    if (this.groundedFrames >= 3 && totalSpeed < 0.3) {
-      this.finishFlip();
-      return;
-    }
-
-    // 速度をさらに低下させて安定化
-    this.body.velocity.scale(0.6, this.body.velocity);
-    this.body.angularVelocity.scale(0.7, this.body.angularVelocity);
-  }
-
-  /**
-   * フリップを終了（着地確定）
-   */
-  finishFlip() {
-    this.isFlipping = false;
-    this.hasLanded = true;
-
-    // コインの向きから表/裏を判定
-    const euler = this.body.quaternion.toEuler();
-    const normalizedRotZ = ((euler.z % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-
-    this.landedSide = normalizedRotZ < Math.PI ? 'heads' : 'tails';
-
-    // 回転を完全に固定（水平に）
+    // Set final rotation
     if (this.landedSide === 'heads') {
-      // 表：Z軸を0に固定
       this.body.quaternion.set(0, 0, 0, 1);
     } else {
-      // 裏：Z軸をπに固定
       const quat = new CANNON.Quaternion();
       quat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI);
       this.body.quaternion.copy(quat);
     }
 
-    // 速度をリセット
+    // Stop all motion
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
 
-    // 位置を調整（正確に地面に接触）
-    this.body.position.y = this.radius + this.height / 2;
+    // Position on ground
+    this.body.position.y = this.radius + 0.05;
   }
 
   /**
-   * コインをリセット
+   * Reset coin to initial state
    */
   reset() {
-    this.body.position.set(0, 2, 0);
+    this.body.position.set(0, 2.5, 0);
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
     this.body.quaternion.set(0, 0, 0, 1);
 
-    this.position = { x: 0, y: 2, z: 0 };
-    this.rotation = { x: 0, y: 0, z: 0 };
-
     this.isFlipping = false;
-    this.hasLanded = false;
+    this.isLanded = false;
     this.landedSide = null;
-    this.bounceCount = 0;
-    this.isGrounded = false;
-    this.groundedFrames = 0;
+    this.lastContactTime = 0;
+    this.contactCount = 0;
   }
 
   /**
-   * コインが着地したか判定
-   */
-  isLanded() {
-    return this.hasLanded;
-  }
-
-  /**
-   * 結果を取得（表=true, 裏=false）
+   * Get result (true = heads, false = tails)
    */
   getResult() {
     return this.landedSide === 'heads';
   }
 
   /**
-   * 物理ボディを破棄
+   * Clean up physics body
    */
   destroy() {
-    if (this.body) {
-      world.removeBody(this.body);
-    }
+    world.removeBody(this.body);
   }
 }
 
 /**
- * 敵クラス
+ * Enemy class
  */
 class Enemy {
   constructor() {
     this.maxHp = 100;
     this.hp = 100;
-    this.damagePerRound = 15;
   }
 
   takeDamage(damage) {
@@ -330,9 +272,5 @@ class Enemy {
 
   reset() {
     this.hp = this.maxHp;
-  }
-
-  getDamage(round) {
-    return this.damagePerRound + round * 2;
   }
 }
