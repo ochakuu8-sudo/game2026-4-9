@@ -33,27 +33,23 @@ let lastTime = Date.now();
  * Initialize game
  */
 function initGame() {
-  console.log('🎮 Initializing game...');
-
   try {
     // Physics
     initPhysics();
-    console.log('✓ Physics initialized');
 
     // Three.js scene
     setupThreeJS();
-    console.log('✓ Three.js scene setup');
 
     // Game objects
-    coinPhysics = new CoinPhysics();
+    if (world) {
+      coinPhysics = new CoinPhysics();
+    }
     enemy = new Enemy();
-    console.log('✓ Game objects created');
 
     // Events
     window.addEventListener('resize', onWindowResize);
 
     // Start render loop
-    console.log('✓ Starting animation loop');
     animate();
   } catch (error) {
     console.error('❌ Error during initialization:', error);
@@ -82,7 +78,7 @@ function setupThreeJS() {
   const canvas = document.getElementById('canvas');
   if (!canvas) {
     console.error('❌ Canvas element not found!');
-    return;
+    throw new Error('Canvas not found');
   }
 
   renderer = new THREE.WebGLRenderer({
@@ -99,7 +95,7 @@ function setupThreeJS() {
   renderer.setSize(width, height, false);
   renderer.setPixelRatio(Math.min(dpr, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;  // Fixed: was PCFShadowShadowMap
 
   // Lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
@@ -178,7 +174,9 @@ function startGame() {
     damageReduction: 0,
   };
 
-  if (coinPhysics) coinPhysics.destroy();
+  if (coinPhysics) {
+    coinPhysics.destroy();
+  }
   coinPhysics = new CoinPhysics();
   enemy.reset();
 
@@ -194,6 +192,8 @@ function showSkillSelection() {
 
   const skills = getRandomSkills(3);
   const grid = document.getElementById('skill-grid');
+  if (!grid) return;
+
   grid.innerHTML = '';
 
   skills.forEach((skill) => {
@@ -208,9 +208,15 @@ function showSkillSelection() {
     grid.appendChild(btn);
   });
 
-  document.getElementById('skill-panel').classList.remove('hidden');
-  document.getElementById('status-text').textContent =
-    'スキルを選択してコインをトス';
+  const panel = document.getElementById('skill-panel');
+  if (panel) {
+    panel.classList.remove('hidden');
+  }
+
+  const status = document.getElementById('status-text');
+  if (status) {
+    status.textContent = 'スキルを選択してコインをトス';
+  }
 }
 
 /**
@@ -220,11 +226,17 @@ function selectSkill(skill) {
   gameState.selectedSkill = skill;
   gameState.isWaiting = true;
 
-  document.getElementById('skill-panel').classList.add('hidden');
-  document.getElementById('status-text').textContent = `${skill.name}を発動...`;
+  const panel = document.getElementById('skill-panel');
+  if (panel) {
+    panel.classList.add('hidden');
+  }
+
+  const status = document.getElementById('status-text');
+  if (status) {
+    status.textContent = `${skill.name}を発動...`;
+  }
 
   if (!coinPhysics) {
-    console.error('❌ coinPhysics not initialized!');
     return;
   }
 
@@ -261,16 +273,30 @@ function showResult() {
 
   const effect = applySkillEffect(skill, gameState, result);
 
-  document.getElementById('result-icon').textContent = result ? '✅ 表' : '❌ 裏';
-  document.getElementById('result-title').textContent = skill.name;
+  const resultIcon = document.getElementById('result-icon');
+  if (resultIcon) {
+    resultIcon.textContent = result ? '✅ 表' : '❌ 裏';
+  }
+
+  const resultTitle = document.getElementById('result-title');
+  if (resultTitle) {
+    resultTitle.textContent = skill.name;
+  }
 
   let msg = effect.message;
   if (effect.damage > 0) {
     msg += `\n敵に${effect.damage}ダメージ！`;
   }
-  document.getElementById('result-message').textContent = msg;
 
-  document.getElementById('result-panel').classList.add('show');
+  const resultMsg = document.getElementById('result-message');
+  if (resultMsg) {
+    resultMsg.textContent = msg;
+  }
+
+  const resultPanel = document.getElementById('result-panel');
+  if (resultPanel) {
+    resultPanel.classList.add('show');
+  }
 
   // Enemy attack
   let enemyDamage = 15 + gameState.round * 2;
@@ -279,24 +305,24 @@ function showResult() {
   if (gameState.dodgeActive) {
     enemyDamage = 0;
     gameState.dodgeActive = false;
-    console.log('✓ Dodge active - no damage taken');
   } else if (gameState.shieldActive) {
     enemyDamage = Math.floor(enemyDamage * 0.5);
     gameState.shieldActive = false;
-    console.log('✓ Shield active - 50% damage reduction');
   }
 
   if (gameState.hardenActive) {
     enemyDamage = Math.floor(enemyDamage * (1 - gameState.damageReduction));
-    console.log('✓ Harden active - ' + (gameState.damageReduction * 100) + '% reduction');
   }
 
   gameState.hp -= Math.max(0, enemyDamage);
-  document.getElementById('hp').textContent = Math.max(0, gameState.hp);
+  const hpDisplay = document.getElementById('hp');
+  if (hpDisplay) {
+    hpDisplay.textContent = Math.max(0, gameState.hp);
+  }
 
   if (gameState.hp <= 0) {
     setTimeout(gameOver, 1500);
-  } else if (enemy.isDefeated()) {
+  } else if (enemy && enemy.isDefeated()) {
     setTimeout(gameOver, 1500);
   }
 }
@@ -305,7 +331,10 @@ function showResult() {
  * Next round
  */
 function nextRound() {
-  document.getElementById('result-panel').classList.remove('show');
+  const resultPanel = document.getElementById('result-panel');
+  if (resultPanel) {
+    resultPanel.classList.remove('show');
+  }
 
   gameState.round++;
   gameState.gold += 10;
@@ -331,28 +360,50 @@ function nextRound() {
  * Game over
  */
 function gameOver() {
-  document.getElementById('final-round').textContent = gameState.round;
-  document.getElementById('final-gold').textContent = gameState.gold;
-  document.getElementById('final-damage').textContent = gameState.damageDealt;
-  document.getElementById('gameover-screen').classList.add('show');
+  const finalRound = document.getElementById('final-round');
+  const finalGold = document.getElementById('final-gold');
+  const finalDamage = document.getElementById('final-damage');
+  const gameoverScreen = document.getElementById('gameover-screen');
+
+  if (finalRound) finalRound.textContent = gameState.round;
+  if (finalGold) finalGold.textContent = gameState.gold;
+  if (finalDamage) finalDamage.textContent = gameState.damageDealt;
+
+  if (gameoverScreen) {
+    gameoverScreen.classList.add('show');
+  }
 }
 
 /**
  * Back to title
  */
 function backToTitle() {
-  document.getElementById('gameover-screen').classList.remove('show');
-  document.getElementById('title-screen').classList.remove('hidden');
-  document.getElementById('skill-panel').classList.add('hidden');
+  const gameoverScreen = document.getElementById('gameover-screen');
+  const titleScreen = document.getElementById('title-screen');
+  const skillPanel = document.getElementById('skill-panel');
+
+  if (gameoverScreen) {
+    gameoverScreen.classList.remove('show');
+  }
+  if (titleScreen) {
+    titleScreen.classList.remove('hidden');
+  }
+  if (skillPanel) {
+    skillPanel.classList.add('hidden');
+  }
 }
 
 /**
  * Update UI
  */
 function updateUI() {
-  document.getElementById('round').textContent = gameState.round;
-  document.getElementById('hp').textContent = Math.max(0, gameState.hp);
-  document.getElementById('gold').textContent = gameState.gold;
+  const round = document.getElementById('round');
+  const hp = document.getElementById('hp');
+  const gold = document.getElementById('gold');
+
+  if (round) round.textContent = gameState.round;
+  if (hp) hp.textContent = Math.max(0, gameState.hp);
+  if (gold) gold.textContent = gameState.gold;
 }
 
 /**
@@ -384,27 +435,40 @@ function animate() {
   const delta = Math.min((now - lastTime) / 1000, 0.016);
   lastTime = now;
 
-  // Step physics
-  if (world) {
-    world.step(1 / 60, delta, 3);
+  try {
+    // Step physics
+    if (world) {
+      world.step(1 / 60, delta, 3);
+    }
+
+    // Update coin
+    if (coinPhysics && coinPhysics.body) {
+      coinPhysics.update(delta);
+
+      // Update coin mesh position
+      if (coinMesh) {
+        const pos = coinPhysics.getPosition();
+        coinMesh.position.set(pos.x, pos.y, pos.z);
+
+        // ⭐ Key fix: Use quaternion directly instead of Euler angles
+        const quat = coinPhysics.getQuaternion();
+        if (quat && coinMesh.quaternion) {
+          coinMesh.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+        }
+      }
+    }
+  } catch (error) {
+    // Silently continue rendering even if coin update fails
+    console.warn('Warning in physics update:', error);
   }
 
-  // Update coin
-  if (coinPhysics && coinMesh) {
-    coinPhysics.update(delta);
-
-    const pos = coinPhysics.getPosition();
-    const rot = coinPhysics.getRotation();
-
-    coinMesh.position.set(pos.x, pos.y, pos.z);
-    coinMesh.rotation.x = rot.x;
-    coinMesh.rotation.y = rot.y;
-    coinMesh.rotation.z = rot.z;
-  }
-
-  // Render scene
-  if (renderer && scene && camera) {
-    renderer.render(scene, camera);
+  // Render scene - ALWAYS do this even if physics fails
+  try {
+    if (renderer && scene && camera) {
+      renderer.render(scene, camera);
+    }
+  } catch (error) {
+    console.error('Critical: Render failed', error);
   }
 }
 

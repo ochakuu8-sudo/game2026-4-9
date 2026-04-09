@@ -70,7 +70,6 @@ class CoinPhysics {
 
     // Three.js用位置・回転
     this.position = { x: 0, y: 2.5, z: 0 };
-    this.rotation = { x: 0, y: 0, z: 0 };
 
     // 状態
     this.isFlipping = false;
@@ -116,44 +115,27 @@ class CoinPhysics {
   }
 
   /**
-   * 現在の回転をオイラー角で取得
+   * Cannon.js のクォータニオンを直接取得
+   * Three.js mesh.quaternion.copy() で使用
    */
-  getRotation() {
-    // Cannon.js の quaternion から正しく角度を取得
-    const q = this.body.quaternion;
-    const x = q.x, y = q.y, z = q.z, w = q.w;
-
-    // クォータニオンからオイラー角を計算
-    const roll = Math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y));
-    const pitch = Math.asin(2 * (w * y - z * x));
-    const yaw = Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
-
-    return {
-      x: roll,
-      y: pitch,
-      z: yaw,
-    };
+  getQuaternion() {
+    return this.body.quaternion;
   }
 
   /**
    * コインの上向きの面の法線ベクトルを取得
-   * 返り値: Vec3（単位ベクトル）
+   * 返り値: { x, y, z }（単位ベクトル）
    */
   getUpVector() {
     const q = this.body.quaternion;
-
-    // ローカルの上方向 (0, 1, 0) をワールド座標に変換
-    // quaternion * vector * conjugate(quaternion)
     const x = q.x, y = q.y, z = q.z, w = q.w;
 
-    // ローカルベクトル (0, 1, 0) を回転適用
-    const localY = [0, 1, 0];
-
-    // クォータニオン回転公式
-    const ix = w * localY[0] + y * localY[2] - z * localY[1];
-    const iy = w * localY[1] + z * localY[0] - x * localY[2];
-    const iz = w * localY[2] + x * localY[1] - y * localY[0];
-    const iw = -x * localY[0] - y * localY[1] - z * localY[2];
+    // ローカルベクトル (0, 1, 0) をワールド座標に変換
+    // クォータニオン回転公式: v' = q * v * q^-1
+    const ix = w * 0 + y * 0 - z * 1;
+    const iy = w * 1 + z * 0 - x * 0;
+    const iz = w * 0 + x * 1 - y * 0;
+    const iw = -x * 0 - y * 1 - z * 0;
 
     const upX = ix * w + iw * -x + iy * -z - iz * -y;
     const upY = iy * w + iw * -y + iz * -x - ix * -z;
@@ -205,12 +187,6 @@ class CoinPhysics {
     this.position.x = pos.x;
     this.position.y = pos.y;
     this.position.z = pos.z;
-
-    // 回転を同期
-    const rot = this.getRotation();
-    this.rotation.x = rot.x;
-    this.rotation.y = rot.y;
-    this.rotation.z = rot.z;
 
     // 地面との衝突判定
     if (this.position.y <= this.thickness / 2 + 0.05) {
@@ -308,7 +284,6 @@ class CoinPhysics {
     this.body.quaternion.set(0, 0, 0, 1);
 
     this.position = { x: 0, y: 2.5, z: 0 };
-    this.rotation = { x: 0, y: 0, z: 0 };
 
     this.isFlipping = false;
     this.hasLanded = false;
