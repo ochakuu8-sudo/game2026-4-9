@@ -237,7 +237,7 @@ class CoinPhysics {
    */
   settleOnGround() {
     this.isFlipping = false;
-    this.isLanded = true;
+    this.hasLanded = true;
 
     const euler = new CANNON.Vec3();
     this.body.quaternion.toEuler(euler);

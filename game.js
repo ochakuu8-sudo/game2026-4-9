@@ -95,7 +95,7 @@ function setupThreeJS() {
   renderer.setSize(width, height, false);
   renderer.setPixelRatio(Math.min(dpr, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;  // Fixed: was PCFShadowShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   // Lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
@@ -158,6 +158,11 @@ function createCoinMesh() {
  * Start new game
  */
 function startGame() {
+  if (typeof CANNON === 'undefined' || !world || !enemy) {
+    alert('ゲームエンジンの初期化に失敗しています。ページを再読み込みしてください。');
+    return;
+  }
+
   document.getElementById('title-screen').classList.add('hidden');
 
   gameState = {
@@ -441,22 +446,26 @@ function animate() {
     }
 
     if (coinPhysics && coinMesh) {
-      coinPhysics.update(delta);
+      try {
+        coinPhysics.update(delta);
 
-      const pos = coinPhysics.getPosition();
-      const rot = coinPhysics.getRotation();
+        const pos = coinPhysics.getPosition();
+        const rot = coinPhysics.getRotation();
 
-      coinMesh.position.set(pos.x, pos.y, pos.z);
-      coinMesh.rotation.x = rot.x;
-      coinMesh.rotation.y = rot.y;
-      coinMesh.rotation.z = rot.z;
+        coinMesh.position.set(pos.x, pos.y, pos.z);
+        coinMesh.rotation.x = rot.x;
+        coinMesh.rotation.y = rot.y;
+        coinMesh.rotation.z = rot.z;
+      } catch (error) {
+        console.error('❌ Error updating coin physics:', error);
+      }
     }
 
     if (renderer && scene && camera) {
       renderer.render(scene, camera);
     }
   } catch (error) {
-    console.error('animate error:', error);
+    console.error('❌ Animation loop error:', error);
   }
 }
 
