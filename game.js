@@ -431,44 +431,32 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
 
-  const now = Date.now();
-  const delta = Math.min((now - lastTime) / 1000, 0.016);
-  lastTime = now;
-
   try {
-    // Step physics
+    const now = Date.now();
+    const delta = Math.min((now - lastTime) / 1000, 0.016);
+    lastTime = now;
+
     if (world) {
       world.step(1 / 60, delta, 3);
     }
 
-    // Update coin
-    if (coinPhysics && coinPhysics.body) {
+    if (coinPhysics && coinMesh) {
       coinPhysics.update(delta);
 
-      // Update coin mesh position
-      if (coinMesh) {
-        const pos = coinPhysics.getPosition();
-        coinMesh.position.set(pos.x, pos.y, pos.z);
+      const pos = coinPhysics.getPosition();
+      const rot = coinPhysics.getRotation();
 
-        // ⭐ Key fix: Use quaternion directly instead of Euler angles
-        const quat = coinPhysics.getQuaternion();
-        if (quat && coinMesh.quaternion) {
-          coinMesh.quaternion.set(quat.x, quat.y, quat.z, quat.w);
-        }
-      }
+      coinMesh.position.set(pos.x, pos.y, pos.z);
+      coinMesh.rotation.x = rot.x;
+      coinMesh.rotation.y = rot.y;
+      coinMesh.rotation.z = rot.z;
     }
-  } catch (error) {
-    // Silently continue rendering even if coin update fails
-    console.warn('Warning in physics update:', error);
-  }
 
-  // Render scene - ALWAYS do this even if physics fails
-  try {
     if (renderer && scene && camera) {
       renderer.render(scene, camera);
     }
   } catch (error) {
-    console.error('Critical: Render failed', error);
+    console.error('animate error:', error);
   }
 }
 

@@ -115,33 +115,16 @@ class CoinPhysics {
   }
 
   /**
-   * Cannon.js のクォータニオンを直接取得
-   * Three.js mesh.quaternion.copy() で使用
+   * 現在の回転をオイラー角で取得
    */
-  getQuaternion() {
-    return this.body.quaternion;
-  }
-
-  /**
-   * コインの上向きの面の法線ベクトルを取得
-   * 返り値: { x, y, z }（単位ベクトル）
-   */
-  getUpVector() {
-    const q = this.body.quaternion;
-    const x = q.x, y = q.y, z = q.z, w = q.w;
-
-    // ローカルベクトル (0, 1, 0) をワールド座標に変換
-    // クォータニオン回転公式: v' = q * v * q^-1
-    const ix = w * 0 + y * 0 - z * 1;
-    const iy = w * 1 + z * 0 - x * 0;
-    const iz = w * 0 + x * 1 - y * 0;
-    const iw = -x * 0 - y * 1 - z * 0;
-
-    const upX = ix * w + iw * -x + iy * -z - iz * -y;
-    const upY = iy * w + iw * -y + iz * -x - ix * -z;
-    const upZ = iz * w + iw * -z + ix * -y - iy * -x;
-
-    return { x: upX, y: upY, z: upZ };
+  getRotation() {
+    const euler = new CANNON.Vec3();
+    this.body.quaternion.toEuler(euler);
+    return {
+      x: euler.x,
+      y: euler.y,
+      z: euler.z,
+    };
   }
 
   /**
@@ -240,11 +223,13 @@ class CoinPhysics {
    * コインが水平か判定（法線ベクトルベース）
    */
   isFlat() {
-    const up = this.getUpVector();
+    const euler = new CANNON.Vec3();
+    this.body.quaternion.toEuler(euler);
 
-    // 上向きベクトルの Y 成分で判定
-    // Y >= 0.7 ならほぼ水平と判定（約45度以内）
-    return Math.abs(up.y) >= 0.7;
+    const tiltX = Math.min(Math.abs(euler.x), Math.PI - Math.abs(euler.x));
+    const tiltY = Math.min(Math.abs(euler.y), Math.PI - Math.abs(euler.y));
+
+    return tiltX < 0.1 && tiltY < 0.1;
   }
 
   /**
@@ -252,26 +237,27 @@ class CoinPhysics {
    */
   settleOnGround() {
     this.isFlipping = false;
-    this.hasLanded = true;
+    this.isLanded = true;
 
-    // 表裏判定（上向き法線ベクトルの Y 成分で判定）
-    const up = this.getUpVector();
-    this.landedSide = up.y > 0 ? 'heads' : 'tails';
+    const euler = new CANNON.Vec3();
+    this.body.quaternion.toEuler(euler);
 
-    // 速度をリセット
-    this.body.velocity.set(0, 0, 0);
-    this.body.angularVelocity.set(0, 0, 0);
+    const rotZ = euler.z;
+    const normalizedZ = ((rotZ % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 
-    // 位置を地面に固定
-    this.body.position.y = this.thickness / 2 + 0.05;
+    this.landedSide = normalizedZ < Math.PI ? 'heads' : 'tails';
 
-    // 回転をリセット
     if (this.landedSide === 'heads') {
       this.body.quaternion.set(0, 0, 0, 1);
     } else {
-      // 裏向き（180度回転）
-      this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI);
+      const quat = new CANNON.Quaternion();
+      quat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.PI);
+      this.body.quaternion.copy(quat);
     }
+
+    this.body.velocity.set(0, 0, 0);
+    this.body.angularVelocity.set(0, 0, 0);
+    this.body.position.y = this.radius + 0.05;
   }
 
   /**
